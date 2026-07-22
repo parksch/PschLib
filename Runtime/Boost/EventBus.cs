@@ -73,6 +73,55 @@ namespace PschLib
             PendingListeners.Clear();
         }
 
+#if UNITY_EDITOR
+        public static void GetDebugInfo(List<DebugInfo> results)
+        {
+            if (results == null)
+            {
+                throw new ArgumentNullException(nameof(results));
+            }
+
+            results.Clear();
+
+            foreach (var pair in Listeners)
+            {
+                var listeners = pair.Value;
+
+                for (var i = 0; i < listeners.Count; i++)
+                {
+                    var listener = listeners[i];
+                    if (!listener.IsDisposed)
+                    {
+                        results.Add(new DebugInfo(
+                            listener.Id,
+                            pair.Key,
+                            listener.Handler.Target,
+                            listener.Handler.Method.DeclaringType,
+                            listener.Handler.Method.Name));
+                    }
+                }
+            }
+        }
+
+        public readonly struct DebugInfo
+        {
+            public readonly long ListenerId;
+            public readonly Type EventType;
+            public readonly object Target;
+            public readonly Type DeclaringType;
+            public readonly string MethodName;
+
+            public DebugInfo(long listenerId, Type eventType, object target, Type declaringType, string methodName)
+            {
+                ListenerId = listenerId;
+                EventType = eventType;
+                Target = target;
+                DeclaringType = declaringType;
+                MethodName = methodName;
+            }
+        }
+#endif
+
         private static void Unsubscribe(Type eventType, long listenerId)
         {
             List<Listener> listeners;
