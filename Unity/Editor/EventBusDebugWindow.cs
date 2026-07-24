@@ -67,10 +67,7 @@ namespace PschLib
             }
 
             var eventTypeName = eventType.FullName ?? eventType.Name;
-            isExpanded = EditorGUILayout.Foldout(
-                isExpanded,
-                $"{eventTypeName} ({endIndex - startIndex})",
-                true);
+            isExpanded = EditorGUILayout.Foldout(isExpanded, $"{eventTypeName} ({endIndex - startIndex})", true);
             _foldoutStates[eventType] = isExpanded;
 
             if (!isExpanded)

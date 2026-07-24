@@ -33,8 +33,7 @@ namespace PschLib
             return new Subscription(() => Unsubscribe(eventType, listenerId));
         }
 
-        public static void Publish<TEvent>(TEvent eventData)
-            where TEvent : struct
+        public static void Publish<TEvent>(TEvent eventData) where TEvent : struct
         {
             var eventType = typeof(TEvent);
             List<Listener> listeners;
