@@ -12,7 +12,7 @@ namespace PschLib
 
             if (document.Rows.Count < 2)
             {
-                error = $"[{document.Name}] 이름 행과 타입 행이 필요합니다.";
+                error = $"[{document.Name}] Name and type rows are required.";
                 return false;
             }
 
@@ -30,9 +30,9 @@ namespace PschLib
 
                 var rawType = column < typeRow.Count ? typeRow[column] : string.Empty;
 
-                if (!SheetTypeMap.TryParse(rawType, out var typeInfo))
+                if (!SheetTypeCatalog.TryParse(rawType, out var typeInfo))
                 {
-                    error = $"[{document.Name}] {column + 1}번째 열 '{name}'의 타입 '{rawType}'을 해석할 수 없습니다.";
+                    error = $"[{document.Name}] Column {column + 1} ('{name}') has an unsupported type: '{rawType}'.";
                     return false;
                 }
 

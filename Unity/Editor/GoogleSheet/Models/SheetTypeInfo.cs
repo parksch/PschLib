@@ -1,13 +1,11 @@
-using System;
-
 namespace PschLib
 {
     public sealed class SheetTypeInfo
     {
         public SheetTypeKind Kind { get; }
-        public Type ElementType { get; }
+        public SheetScalarTypeDefinition ElementType { get; }
 
-        public SheetTypeInfo(SheetTypeKind kind, Type elementType)
+        public SheetTypeInfo(SheetTypeKind kind, SheetScalarTypeDefinition elementType)
         {
             Kind = kind;
             ElementType = elementType;

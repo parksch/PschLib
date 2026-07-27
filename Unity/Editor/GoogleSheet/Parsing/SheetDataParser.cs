@@ -1,4 +1,3 @@
-
 using System;
 using System.Collections.Generic;
 
@@ -15,13 +14,13 @@ namespace PschLib
 
             if (keyField == null)
             {
-                error = $"[{document.Name}] id 열이 없습니다.";
+                error = $"[{document.Name}] An id column is required.";
                 return false;
             }
 
-            if (keyField.Type.Kind != SheetTypeKind.Scalar || keyField.Type.ElementType != typeof(string))
+            if (keyField.Type.Kind != SheetTypeKind.Scalar || keyField.Type.ElementType.RuntimeType != typeof(string))
             {
-                error = $"[{document.Name}] id 열의 타입은 string이어야 합니다.";
+                error = $"[{document.Name}] The id column must be a string.";
                 return false;
             }
 
@@ -43,7 +42,7 @@ namespace PschLib
 
                 if (idRows.TryGetValue(dataRow.Id, out var firstRow))
                 {
-                    error = $"[{document.Name}] ID '{dataRow.Id}'가 {firstRow}행과 {dataRow.RowNumber}행에서 중복됐습니다.";
+                    error = $"[{document.Name}] ID '{dataRow.Id}' is duplicated in rows {firstRow} and {dataRow.RowNumber}.";
                     return false;
                 }
 
@@ -69,7 +68,7 @@ namespace PschLib
 
                 if (!SheetValueParser.TryParse(rawValue, field.Type, out var value, out var valueError))
                 {
-                    error = $"[{sheetName}] {rowNumber}행 '{field.Name}' 열: {valueError}";
+                    error = $"[{sheetName}] Row {rowNumber}, column '{field.Name}': {valueError}";
                     return false;
                 }
 
@@ -79,7 +78,7 @@ namespace PschLib
 
                     if (string.IsNullOrEmpty(id))
                     {
-                        error = $"[{sheetName}] {rowNumber}행의 id가 비어 있습니다.";
+                        error = $"[{sheetName}] The id is empty in row {rowNumber}.";
                         return false;
                     }
 

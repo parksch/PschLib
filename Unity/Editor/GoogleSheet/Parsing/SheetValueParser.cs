@@ -16,7 +16,7 @@ namespace PschLib
             {
                 if (string.IsNullOrEmpty(rawValue))
                 {
-                    error = "Enum 값은 비워둘 수 없습니다.";
+                    error = "An enum value cannot be empty.";
                     return false;
                 }
 
@@ -32,10 +32,10 @@ namespace PschLib
 
             if (typeInfo.Kind == SheetTypeKind.List)
             {
-                return TryParseList(rawValue, typeInfo.ElementType, out value, out error);
+                return TryParseList(rawValue, typeInfo.ElementType.RuntimeType, out value, out error);
             }
 
-            return TryParseScalar(rawValue, typeInfo.ElementType, out value, out error);
+            return TryParseScalar(rawValue, typeInfo.ElementType.RuntimeType, out value, out error);
         }
 
         private static bool TryParseScalar(string rawValue, Type type, out object value, out string error)
@@ -85,7 +85,7 @@ namespace PschLib
                 return true;
             }
 
-            error = $"'{rawValue}' 값을 {type.Name} 타입으로 변환할 수 없습니다.";
+            error = $"'{rawValue}' cannot be converted to {type.Name}.";
             return false;
         }
 
