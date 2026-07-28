@@ -47,7 +47,7 @@ namespace PschLib
             builder.AppendLine($"namespace {targetNamespace}");
             builder.AppendLine("{");
             builder.AppendLine("    [Serializable]");
-            builder.AppendLine($"    public partial class {className}");
+            builder.AppendLine($"    public partial class {className} // Generated data. Do not edit.");
             builder.AppendLine("    {");
 
             foreach (var field in fields)

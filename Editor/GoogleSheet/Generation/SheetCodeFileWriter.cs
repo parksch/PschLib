@@ -51,7 +51,7 @@ namespace PschLib
             var builder = new StringBuilder();
             builder.AppendLine($"namespace {targetNamespace}");
             builder.AppendLine("{");
-            builder.AppendLine($"    public partial class {className}");
+            builder.AppendLine($"    public partial class {className} // User functions.");
             builder.AppendLine("    {");
             builder.AppendLine("    }");
             builder.AppendLine("}");

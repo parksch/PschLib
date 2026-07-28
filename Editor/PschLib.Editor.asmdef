@@ -1,0 +1,18 @@
+{
+    "name": "PschLib.Editor",
+    "rootNamespace": "",
+    "references": [
+        "GUID:911c29e3ddec356429bef19ddd8ef81f"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
