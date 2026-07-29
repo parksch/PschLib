@@ -8,11 +8,11 @@ namespace PschLib
 {
     internal static class SheetAssetWriter
     {
-        public static string Write(GoogleSheetSettings settings, GoogleSheetImportResult result)
+        public static string Write(GoogleSheetProject project, GoogleSheetImportResult result)
         {
-            if (settings == null)
+            if (project == null)
             {
-                throw new ArgumentNullException(nameof(settings));
+                throw new ArgumentNullException(nameof(project));
             }
 
             if (result == null)
@@ -25,17 +25,18 @@ namespace PschLib
                 throw new InvalidOperationException(classNameError);
             }
 
-            var dataType = FindType($"{settings.TargetNamespace}.{className}");
-            var tableType = FindType($"{settings.TargetNamespace}.{className}Table");
+            var targetNamespace = GoogleSheetPathUtility.GetTargetNamespace(project);
+            var dataType = FindType($"{targetNamespace}.{className}");
+            var tableType = FindType($"{targetNamespace}.{className}Table");
 
             if (dataType == null)
             {
-                throw new InvalidOperationException($"Generated data type was not found: {settings.TargetNamespace}.{className}");
+                throw new InvalidOperationException($"Generated data type was not found: {targetNamespace}.{className}");
             }
 
             if (tableType == null || !typeof(ScriptableObject).IsAssignableFrom(tableType))
             {
-                throw new InvalidOperationException($"Generated table type was not found: {settings.TargetNamespace}.{className}Table");
+                throw new InvalidOperationException($"Generated table type was not found: {targetNamespace}.{className}Table");
             }
 
             var rowsField = tableType.GetField("rows", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -46,7 +47,7 @@ namespace PschLib
             }
 
             var rows = CreateRows(dataType, result);
-            var assetFolder = GoogleSheetPathUtility.NormalizeAssetFolder(settings.AssetOutputPath, "asset output");
+            var assetFolder = GoogleSheetPathUtility.GetAssetOutputPath(project);
             GoogleSheetPathUtility.EnsureAssetFolder(assetFolder);
 
             var assetPath = $"{assetFolder}/{className}Table.asset";
@@ -70,6 +71,12 @@ namespace PschLib
 
             Undo.RecordObject(tableAsset, $"Import {className} Sheet");
             rowsField.SetValue(tableAsset, rows);
+
+            if (tableAsset is ISerializationCallbackReceiver serializationCallbackReceiver)
+            {
+                serializationCallbackReceiver.OnAfterDeserialize();
+            }
+
             EditorUtility.SetDirty(tableAsset);
             AssetDatabase.SaveAssets();
             return assetPath;
@@ -93,13 +100,40 @@ namespace PschLib
                         throw new InvalidOperationException($"Generated field was not found: {dataType.FullName}.{pair.Key.Name}");
                     }
 
-                    field.SetValue(data, pair.Value);
+                    field.SetValue(data, ConvertValue(pair.Value, field.FieldType));
                 }
 
                 rows.Add(data);
             }
 
             return rows;
+        }
+
+        private static object ConvertValue(object value, Type targetType)
+        {
+            if (targetType.IsEnum)
+            {
+                return Enum.Parse(targetType, (string)value, true);
+            }
+
+            if (targetType.IsGenericType && targetType.GetGenericTypeDefinition() == typeof(System.Collections.Generic.List<>))
+            {
+                var elementType = targetType.GetGenericArguments()[0];
+
+                if (elementType.IsEnum)
+                {
+                    var result = (IList)Activator.CreateInstance(targetType);
+
+                    foreach (var enumValue in (string[])value)
+                    {
+                        result.Add(Enum.Parse(elementType, enumValue, true));
+                    }
+
+                    return result;
+                }
+            }
+
+            return value;
         }
 
         private static Type FindType(string fullName)

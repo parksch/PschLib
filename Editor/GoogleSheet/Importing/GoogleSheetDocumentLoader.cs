@@ -6,11 +6,11 @@ namespace PschLib
 {
     internal static class GoogleSheetDocumentLoader
     {
-        public static async Task<SheetDocument> LoadAsync(GoogleSheetSettings settings, GoogleSheetEntry entry)
+        public static async Task<SheetDocument> LoadAsync(GoogleSheetProject project, GoogleSheetEntry entry)
         {
-            if (settings == null)
+            if (project == null)
             {
-                throw new ArgumentNullException(nameof(settings));
+                throw new ArgumentNullException(nameof(project));
             }
 
             if (entry == null)
@@ -18,19 +18,19 @@ namespace PschLib
                 throw new ArgumentNullException(nameof(entry));
             }
 
-            if (!settings.IsConnected)
+            if (!project.IsConnected)
             {
-                throw new InvalidOperationException("Google Sheet is not connected.");
+                throw new InvalidOperationException("Google Sheet project is not connected.");
             }
 
-            var client = new GoogleSheetWebClient(settings.WebAppUrl);
-            var response = await client.GetSheetDataAsync(entry.SheetId);
-            ValidateResponse(response, entry.SheetId);
+            var client = new GoogleSheetWebClient(project.Server.WebAppUrl);
+            var response = await client.GetSheetDataAsync(project.SpreadsheetId, entry.SheetId);
+            ValidateResponse(response, project.SpreadsheetId, entry.SheetId);
 
             return CreateDocument(response.Sheet);
         }
 
-        private static void ValidateResponse(GoogleSheetDataResponse response, int requestedSheetId)
+        private static void ValidateResponse(GoogleSheetDataResponse response, string requestedSpreadsheetId, int requestedSheetId)
         {
             if (response == null)
             {
@@ -45,6 +45,11 @@ namespace PschLib
             if (response.Sheet == null)
             {
                 throw new InvalidOperationException("Google Sheet response does not contain sheet data.");
+            }
+
+            if (response.SpreadsheetId != requestedSpreadsheetId)
+            {
+                throw new InvalidOperationException($"Google Sheet returned SpreadsheetId '{response.SpreadsheetId}' instead of '{requestedSpreadsheetId}'.");
             }
 
             if (response.Sheet.SheetId != requestedSheetId)

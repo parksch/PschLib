@@ -5,11 +5,11 @@ namespace PschLib
 {
     internal static class GoogleSheetImportService
     {
-        public static async Task<GoogleSheetImportResult> PrepareAsync(GoogleSheetSettings settings, GoogleSheetEntry entry)
+        public static async Task<GoogleSheetImportResult> PrepareAsync(GoogleSheetProject project, GoogleSheetEntry entry)
         {
-            if (settings == null)
+            if (project == null)
             {
-                throw new ArgumentNullException(nameof(settings));
+                throw new ArgumentNullException(nameof(project));
             }
 
             if (entry == null)
@@ -17,7 +17,7 @@ namespace PschLib
                 throw new ArgumentNullException(nameof(entry));
             }
 
-            var document = await GoogleSheetDocumentLoader.LoadAsync(settings, entry);
+            var document = await GoogleSheetDocumentLoader.LoadAsync(project, entry);
 
             if (!SheetHeaderParser.TryParse(document, out var fields, out var headerError))
             {
@@ -29,7 +29,14 @@ namespace PschLib
                 throw new InvalidOperationException(dataError);
             }
 
-            if (!SheetDataCodeGenerator.TryGenerate(document.Name, fields, settings.TargetNamespace, out var generatedCode, out var generationError))
+            if (!SheetSharedEnumCatalog.TryUpdate(project, document.Name, fields, rows, out var sharedEnumError))
+            {
+                throw new InvalidOperationException(sharedEnumError);
+            }
+
+            var targetNamespace = GoogleSheetPathUtility.GetTargetNamespace(project);
+
+            if (!SheetDataCodeGenerator.TryGenerate(document.Name, fields, rows, targetNamespace, out var generatedCode, out var generationError))
             {
                 throw new InvalidOperationException(generationError);
             }

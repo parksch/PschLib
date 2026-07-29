@@ -32,6 +32,7 @@ namespace PschLib
         [Serializable]
         private sealed class PendingImports
         {
+            public string ProjectAssetPath;
             public List<int> SheetIds = new List<int>();
         }
 
@@ -55,14 +56,30 @@ namespace PschLib
             SetState(GoogleSheetImportState.GeneratingCode, $"Generating code... ({completedCount}/{sheetCount})");
         }
 
+        public static void CompleteWithoutAssets(int sheetCount)
+        {
+            SetState(GoogleSheetImportState.Completed, $"Import completed. Generated code for {sheetCount} sheet(s).");
+        }
+
         public static void ReportFailure(Exception exception)
         {
             SetState(GoogleSheetImportState.Failed, $"Import failed.\n{exception.Message}");
         }
 
-        public static void Queue(IEnumerable<GoogleSheetEntry> sheets)
+        public static void Queue(GoogleSheetProject project, IEnumerable<GoogleSheetEntry> sheets)
         {
+            if (project == null)
+            {
+                throw new ArgumentNullException(nameof(project));
+            }
+
             var pending = ReadPending();
+            pending.ProjectAssetPath = AssetDatabase.GetAssetPath(project);
+
+            if (string.IsNullOrWhiteSpace(pending.ProjectAssetPath))
+            {
+                throw new InvalidOperationException("Google Sheet Project must be saved as an asset.");
+            }
 
             foreach (var sheet in sheets)
             {
@@ -107,22 +124,28 @@ namespace PschLib
 
             try
             {
-                var settings = GoogleSheetSettings.instance;
                 var pending = ReadPending();
+                var project = AssetDatabase.LoadAssetAtPath<GoogleSheetProject>(pending.ProjectAssetPath);
+
+                if (project == null)
+                {
+                    throw new InvalidOperationException($"Pending Google Sheet Project was not found: {pending.ProjectAssetPath}");
+                }
+
                 var completedCount = 0;
                 SetState(GoogleSheetImportState.CreatingAssets, $"Creating ScriptableObject assets... (0/{pending.SheetIds.Count})");
 
                 foreach (var sheetId in pending.SheetIds)
                 {
-                    var entry = FindEntry(settings, sheetId);
+                    var entry = FindEntry(project, sheetId);
 
                     if (entry == null)
                     {
                         throw new InvalidOperationException($"Pending Google Sheet was not found in settings: {sheetId}");
                     }
 
-                    var result = await GoogleSheetImportService.PrepareAsync(settings, entry);
-                    var assetPath = SheetAssetWriter.Write(settings, result);
+                    var result = await GoogleSheetImportService.PrepareAsync(project, entry);
+                    var assetPath = SheetAssetWriter.Write(project, result);
                     completedCount++;
                     SetState(GoogleSheetImportState.CreatingAssets, $"Creating ScriptableObject assets... ({completedCount}/{pending.SheetIds.Count})");
                     Debug.Log($"Google Sheet asset generated: {assetPath}");
@@ -143,9 +166,9 @@ namespace PschLib
             }
         }
 
-        private static GoogleSheetEntry FindEntry(GoogleSheetSettings settings, int sheetId)
+        private static GoogleSheetEntry FindEntry(GoogleSheetProject project, int sheetId)
         {
-            foreach (var sheet in settings.Sheets)
+            foreach (var sheet in project.Sheets)
             {
                 if (sheet.SheetId == sheetId)
                 {

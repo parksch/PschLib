@@ -25,9 +25,29 @@ namespace PschLib
             return Deserialize<GoogleSheetListResponse>(json);
         }
 
+        public async Task<GoogleSheetProjectListResponse> GetProjectsAsync()
+        {
+            var json = await GetJsonAsync(BuildUrl("action=projects"));
+            return Deserialize<GoogleSheetProjectListResponse>(json);
+        }
+
+        public async Task<GoogleSheetListResponse> GetSheetListAsync(string spreadsheetId)
+        {
+            var id = Escape(spreadsheetId, nameof(spreadsheetId));
+            var json = await GetJsonAsync(BuildUrl($"action=sheets&spreadsheetId={id}"));
+            return Deserialize<GoogleSheetListResponse>(json);
+        }
+
         public async Task<GoogleSheetDataResponse> GetSheetDataAsync(int sheetId)
         {
             var json = await GetJsonAsync(BuildUrl($"action=data&sheetId={sheetId}"));
+            return Deserialize<GoogleSheetDataResponse>(json);
+        }
+
+        public async Task<GoogleSheetDataResponse> GetSheetDataAsync(string spreadsheetId, int sheetId)
+        {
+            var id = Escape(spreadsheetId, nameof(spreadsheetId));
+            var json = await GetJsonAsync(BuildUrl($"action=data&spreadsheetId={id}&sheetId={sheetId}"));
             return Deserialize<GoogleSheetDataResponse>(json);
         }
 
@@ -35,6 +55,16 @@ namespace PschLib
         {
             var separator = _webAppUrl.Contains("?") ? "&" : "?";
             return $"{_webAppUrl}{separator}{query}";
+        }
+
+        private static string Escape(string value, string parameterName)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                throw new ArgumentException("The request parameter is empty.", parameterName);
+            }
+
+            return UnityWebRequest.EscapeURL(value.Trim());
         }
 
         private static Task<string> GetJsonAsync(string url)

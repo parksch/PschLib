@@ -17,7 +17,7 @@ namespace PschLib
             "uint", "ulong", "unchecked", "unsafe", "ushort", "using", "virtual", "void", "volatile", "while"
         };
 
-        public static bool TryGenerate(string sheetName, IReadOnlyList<SheetField> fields, string targetNamespace, out string code, out string error)
+        public static bool TryGenerate(string sheetName, IReadOnlyList<SheetField> fields, IReadOnlyList<SheetDataRow> rows, string targetNamespace, out string code, out string error)
         {
             code = null;
             error = null;
@@ -40,15 +40,6 @@ namespace PschLib
             }
 
             var fieldNames = new HashSet<string>(StringComparer.Ordinal);
-            var builder = new StringBuilder();
-            builder.AppendLine("using System;");
-            builder.AppendLine("using System.Collections.Generic;");
-            builder.AppendLine();
-            builder.AppendLine($"namespace {targetNamespace}");
-            builder.AppendLine("{");
-            builder.AppendLine("    [Serializable]");
-            builder.AppendLine($"    public partial class {className} // Generated data. Do not edit.");
-            builder.AppendLine("    {");
 
             foreach (var field in fields)
             {
@@ -64,7 +55,46 @@ namespace PschLib
                     return false;
                 }
 
-                if (!TryGetTypeName(field.Type, out var typeName, out var typeError))
+            }
+
+            if (!TryCollectLocalEnumValues(className, fields, rows, out var enumValues, out error))
+            {
+                return false;
+            }
+
+            if (!TryValidateExistingEnumValues(fields, rows, out error))
+            {
+                return false;
+            }
+
+            var builder = new StringBuilder();
+            builder.AppendLine("using System;");
+            builder.AppendLine("using System.Collections.Generic;");
+            builder.AppendLine();
+            builder.AppendLine($"namespace {targetNamespace}");
+            builder.AppendLine("{");
+
+            foreach (var pair in enumValues)
+            {
+                builder.AppendLine($"    public enum {pair.Key}");
+                builder.AppendLine("    {");
+
+                for (var index = 0; index < pair.Value.Count; index++)
+                {
+                    builder.AppendLine($"        {pair.Value[index]} = {index},");
+                }
+
+                builder.AppendLine("    }");
+                builder.AppendLine();
+            }
+
+            builder.AppendLine("    [Serializable]");
+            builder.AppendLine($"    public partial class {className} // Generated data. Do not edit.");
+            builder.AppendLine("    {");
+
+            foreach (var field in fields)
+            {
+                if (!TryGetTypeName(className, field, out var typeName, out var typeError))
                 {
                     error = $"[{sheetName}] Field '{field.Name}': {typeError}";
                     return false;
@@ -79,10 +109,136 @@ namespace PschLib
             return true;
         }
 
-        private static bool TryGetTypeName(SheetTypeInfo typeInfo, out string typeName, out string error)
+        private static bool TryCollectLocalEnumValues(string className, IReadOnlyList<SheetField> fields, IReadOnlyList<SheetDataRow> rows, out Dictionary<string, List<string>> result, out string error)
+        {
+            result = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+            error = null;
+
+            foreach (var field in fields)
+            {
+                if (field.Type.EnumMode != SheetEnumMode.Local)
+                {
+                    continue;
+                }
+
+                var enumName = $"{className}{field.Name}";
+                var values = new List<string>();
+                var uniqueValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var row in rows)
+                {
+                    if (!row.Values.TryGetValue(field, out var rawValue))
+                    {
+                        continue;
+                    }
+
+                    if (field.Type.Kind == SheetTypeKind.Enum)
+                    {
+                        if (!TryAddEnumValue(field, row.RowNumber, (string)rawValue, values, uniqueValues, out error))
+                        {
+                            return false;
+                        }
+
+                        continue;
+                    }
+
+                    foreach (var enumValue in (string[])rawValue)
+                    {
+                        if (!TryAddEnumValue(field, row.RowNumber, enumValue, values, uniqueValues, out error))
+                        {
+                            return false;
+                        }
+                    }
+                }
+
+                result.Add(enumName, values);
+            }
+
+            return true;
+        }
+
+        private static bool TryValidateExistingEnumValues(IReadOnlyList<SheetField> fields, IReadOnlyList<SheetDataRow> rows, out string error)
+        {
+            error = null;
+
+            foreach (var field in fields)
+            {
+                if (field.Type.EnumMode != SheetEnumMode.Existing)
+                {
+                    continue;
+                }
+
+                var enumType = field.Type.EnumRuntimeType;
+
+                if (enumType == null || !enumType.IsEnum)
+                {
+                    error = $"Field '{field.Name}' does not reference a valid enum type.";
+                    return false;
+                }
+
+                if (!enumType.IsPublic && !enumType.IsNestedPublic)
+                {
+                    error = $"Enum '{field.Type.EnumTypeName}' must be public.";
+                    return false;
+                }
+
+                var enumNames = new HashSet<string>(Enum.GetNames(enumType), StringComparer.OrdinalIgnoreCase);
+
+                foreach (var row in rows)
+                {
+                    if (!row.Values.TryGetValue(field, out var rawValue))
+                    {
+                        continue;
+                    }
+
+                    if (field.Type.Kind == SheetTypeKind.Enum)
+                    {
+                        if (!enumNames.Contains((string)rawValue))
+                        {
+                            error = $"Row {row.RowNumber}, field '{field.Name}': '{rawValue}' does not exist in {field.Type.EnumTypeName}.";
+                            return false;
+                        }
+
+                        continue;
+                    }
+
+                    foreach (var value in (string[])rawValue)
+                    {
+                        if (!enumNames.Contains(value))
+                        {
+                            error = $"Row {row.RowNumber}, field '{field.Name}': '{value}' does not exist in {field.Type.EnumTypeName}.";
+                            return false;
+                        }
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        private static bool TryAddEnumValue(SheetField field, int rowNumber, string value, List<string> values, HashSet<string> uniqueValues, out string error)
+        {
+            error = null;
+
+            if (!IsValidIdentifier(value))
+            {
+                error = $"Row {rowNumber}, field '{field.Name}': '{value}' is not a valid enum value.";
+                return false;
+            }
+
+            if (uniqueValues.Add(value))
+            {
+                values.Add(value);
+            }
+
+            return true;
+        }
+
+        private static bool TryGetTypeName(string className, SheetField field, out string typeName, out string error)
         {
             typeName = null;
             error = null;
+            var typeInfo = field.Type;
 
             if (typeInfo == null)
             {
@@ -92,8 +248,28 @@ namespace PschLib
 
             if (typeInfo.Kind == SheetTypeKind.Enum || typeInfo.Kind == SheetTypeKind.EnumList)
             {
-                error = "Enum code generation is not implemented yet.";
-                return false;
+                string enumTypeName;
+
+                if (typeInfo.EnumMode == SheetEnumMode.Local)
+                {
+                    enumTypeName = $"{className}{field.Name}";
+                }
+                else if (typeInfo.EnumMode == SheetEnumMode.Shared)
+                {
+                    enumTypeName = string.IsNullOrWhiteSpace(typeInfo.EnumTypeName) ? field.Name : typeInfo.EnumTypeName;
+                }
+                else if (typeInfo.EnumMode == SheetEnumMode.Existing)
+                {
+                    enumTypeName = $"global::{typeInfo.EnumTypeName}";
+                }
+                else
+                {
+                    error = "Enum mode is missing.";
+                    return false;
+                }
+
+                typeName = typeInfo.Kind == SheetTypeKind.EnumList ? $"List<{enumTypeName}>" : enumTypeName;
+                return true;
             }
 
             if (typeInfo.ElementType == null)
@@ -173,7 +349,7 @@ namespace PschLib
             return true;
         }
 
-        private static bool IsValidIdentifier(string value)
+        public static bool IsValidIdentifier(string value)
         {
             if (string.IsNullOrWhiteSpace(value) || (!char.IsLetter(value[0]) && value[0] != '_'))
             {

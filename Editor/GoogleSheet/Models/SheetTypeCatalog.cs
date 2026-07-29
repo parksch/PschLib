@@ -29,9 +29,8 @@ namespace PschLib
 
             var typeName = rawType.Trim();
 
-            if (typeName.Equals("enum", StringComparison.OrdinalIgnoreCase))
+            if (TryParseEnum(typeName, SheetTypeKind.Enum, out typeInfo))
             {
-                typeInfo = new SheetTypeInfo(SheetTypeKind.Enum, null);
                 return true;
             }
 
@@ -39,9 +38,8 @@ namespace PschLib
             {
                 var elementName = typeName.Substring(5, typeName.Length - 6).Trim();
 
-                if (elementName.Equals("enum", StringComparison.OrdinalIgnoreCase))
+                if (TryParseEnum(elementName, SheetTypeKind.EnumList, out typeInfo))
                 {
-                    typeInfo = new SheetTypeInfo(SheetTypeKind.EnumList, null);
                     return true;
                 }
 
@@ -83,6 +81,73 @@ namespace PschLib
             }
 
             return ByRuntimeType.TryGetValue(runtimeType, out definition);
+        }
+
+        private static bool TryParseEnum(string typeName, SheetTypeKind kind, out SheetTypeInfo typeInfo)
+        {
+            typeInfo = null;
+
+            if (typeName.Equals("enum", StringComparison.OrdinalIgnoreCase))
+            {
+                typeInfo = new SheetTypeInfo(kind, SheetEnumMode.Local, null, null);
+                return true;
+            }
+
+            if (kind == SheetTypeKind.Enum && typeName.Equals("shared-enum", StringComparison.OrdinalIgnoreCase))
+            {
+                typeInfo = new SheetTypeInfo(kind, SheetEnumMode.Shared, null, null);
+                return true;
+            }
+
+            if (TryGetGenericArgument(typeName, "shared-enum", out var sharedEnumName))
+            {
+                typeInfo = new SheetTypeInfo(kind, SheetEnumMode.Shared, sharedEnumName, null);
+                return true;
+            }
+
+            if (!TryGetGenericArgument(typeName, "enum", out var existingEnumName))
+            {
+                return false;
+            }
+
+            var enumType = FindType(existingEnumName);
+
+            if (enumType == null || !enumType.IsEnum)
+            {
+                return false;
+            }
+
+            typeInfo = new SheetTypeInfo(kind, SheetEnumMode.Existing, existingEnumName, enumType);
+            return true;
+        }
+
+        private static bool TryGetGenericArgument(string value, string prefix, out string argument)
+        {
+            argument = null;
+            var opening = $"{prefix}<";
+
+            if (!value.StartsWith(opening, StringComparison.OrdinalIgnoreCase) || !value.EndsWith(">", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            argument = value.Substring(opening.Length, value.Length - opening.Length - 1).Trim();
+            return !string.IsNullOrWhiteSpace(argument);
+        }
+
+        private static Type FindType(string fullName)
+        {
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                var type = assembly.GetType(fullName, false);
+
+                if (type != null)
+                {
+                    return type;
+                }
+            }
+
+            return null;
         }
 
         private static Dictionary<string, SheetScalarTypeDefinition> CreateSheetNameMap()

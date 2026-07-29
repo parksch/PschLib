@@ -4,10 +4,28 @@ using System.Collections.Generic;
 namespace PschLib
 {
     [Serializable]
+    internal sealed class GoogleSheetProjectListResponse
+    {
+        public bool Success;
+        public string Error;
+        public List<GoogleSheetProjectItem> Projects = new List<GoogleSheetProjectItem>();
+    }
+
+    [Serializable]
+    internal sealed class GoogleSheetProjectItem
+    {
+        public string Key;
+        public string SpreadsheetId;
+        public string Name;
+    }
+
+    [Serializable]
     internal sealed class GoogleSheetListResponse
     {
         public bool Success;
         public string Error;
+        public string SpreadsheetId;
+        public string Name;
         public List<GoogleSheetListItem> Sheets = new List<GoogleSheetListItem>();
     }
 
@@ -23,6 +41,8 @@ namespace PschLib
     {
         public bool Success;
         public string Error;
+        public string SpreadsheetId;
+        public string SpreadsheetName;
         public GoogleSheetDataPayload Sheet;
     }
 

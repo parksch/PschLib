@@ -7,6 +7,36 @@ namespace PschLib
 {
     internal static class GoogleSheetPathUtility
     {
+        public static string GetProjectName(GoogleSheetProject project)
+        {
+            if (project == null)
+            {
+                throw new ArgumentNullException(nameof(project));
+            }
+
+            if (!SheetDataCodeGenerator.TryCreateClassName(project.ProjectKey, out var projectName, out var error))
+            {
+                throw new InvalidOperationException(error);
+            }
+
+            return projectName;
+        }
+
+        public static string GetTargetNamespace(GoogleSheetProject project)
+        {
+            return $"{project.RootNamespace}.{GetProjectName(project)}";
+        }
+
+        public static string GetScriptOutputPath(GoogleSheetProject project)
+        {
+            return $"{NormalizeAssetFolder(project.ScriptOutputPath, "script output")}/{GetProjectName(project)}";
+        }
+
+        public static string GetAssetOutputPath(GoogleSheetProject project)
+        {
+            return $"{NormalizeAssetFolder(project.AssetOutputPath, "asset output")}/{GetProjectName(project)}";
+        }
+
         public static string NormalizeAssetFolder(string assetPath, string label)
         {
             if (string.IsNullOrWhiteSpace(assetPath))

@@ -26,8 +26,7 @@ namespace PschLib
 
             if (typeInfo.Kind == SheetTypeKind.EnumList)
             {
-                value = ParseEnumList(rawValue);
-                return true;
+                return TryParseEnumList(rawValue, out value, out error);
             }
 
             if (typeInfo.Kind == SheetTypeKind.List)
@@ -115,11 +114,14 @@ namespace PschLib
             return true;
         }
 
-        private static string[] ParseEnumList(string rawValue)
+        private static bool TryParseEnumList(string rawValue, out object value, out string error)
         {
+            error = null;
+
             if (string.IsNullOrEmpty(rawValue))
             {
-                return Array.Empty<string>();
+                value = Array.Empty<string>();
+                return true;
             }
 
             var values = rawValue.Split(',');
@@ -127,9 +129,17 @@ namespace PschLib
             for (var i = 0; i < values.Length; i++)
             {
                 values[i] = values[i].Trim();
+
+                if (string.IsNullOrEmpty(values[i]))
+                {
+                    value = null;
+                    error = "An enum list cannot contain an empty value.";
+                    return false;
+                }
             }
 
-            return values;
+            value = values;
+            return true;
         }
     }
 }
