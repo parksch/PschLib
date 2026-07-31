@@ -6,7 +6,10 @@ namespace PschLib
     public sealed class GoogleSheetServer : ScriptableObject
     {
         public string WebAppUrl;
+        [HideInInspector] public string RegistrySpreadsheetId;
+        [HideInInspector] public int RegistrySheetId;
 
         public bool IsConfigured => !string.IsNullOrWhiteSpace(WebAppUrl);
+        public bool HasRegistrySpreadsheet => !string.IsNullOrWhiteSpace(RegistrySpreadsheetId);
     }
 }

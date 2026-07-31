@@ -8,6 +8,8 @@ namespace PschLib
     {
         public bool Success;
         public string Error;
+        public string RegistrySpreadsheetId;
+        public int RegistrySheetId;
         public List<GoogleSheetProjectItem> Projects = new List<GoogleSheetProjectItem>();
     }
 
@@ -17,6 +19,14 @@ namespace PschLib
         public string Key;
         public string SpreadsheetId;
         public string Name;
+    }
+
+    [Serializable]
+    internal sealed class GoogleSheetProjectRegistrationResponse
+    {
+        public bool Success;
+        public string Error;
+        public GoogleSheetProjectItem Project;
     }
 
     [Serializable]

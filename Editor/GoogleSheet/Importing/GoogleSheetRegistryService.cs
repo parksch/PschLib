@@ -7,6 +7,95 @@ namespace PschLib
 {
     internal static class GoogleSheetRegistryService
     {
+        public static bool TryValidateRegistrationInput(string rawKey, string rawSpreadsheetAddress, IReadOnlyList<GoogleSheetProjectItem> projects, out string key, out string spreadsheetId, out string error)
+        {
+            key = rawKey?.Trim();
+            spreadsheetId = null;
+            error = null;
+
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                error = "Project name is required.";
+                return false;
+            }
+
+            if (!SheetDataCodeGenerator.IsValidIdentifier(key))
+            {
+                error = $"Project name '{key}' is not a valid C# identifier.";
+                return false;
+            }
+
+            if (!TryExtractSpreadsheetId(rawSpreadsheetAddress, out spreadsheetId, out error))
+            {
+                return false;
+            }
+
+            if (projects == null)
+            {
+                return true;
+            }
+
+            foreach (var project in projects)
+            {
+                if (project == null)
+                {
+                    continue;
+                }
+
+                if (string.Equals(project.Key?.Trim(), key, StringComparison.OrdinalIgnoreCase))
+                {
+                    error = $"Project name is already registered: {key}";
+                    return false;
+                }
+
+                if (string.Equals(project.SpreadsheetId?.Trim(), spreadsheetId, StringComparison.Ordinal))
+                {
+                    error = $"Spreadsheet ID is already registered: {spreadsheetId}";
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        public static bool TryExtractSpreadsheetId(string rawAddress, out string spreadsheetId, out string error)
+        {
+            spreadsheetId = null;
+            error = null;
+            var address = rawAddress?.Trim();
+
+            if (string.IsNullOrWhiteSpace(address))
+            {
+                error = "Google Sheet URL or Spreadsheet ID is required.";
+                return false;
+            }
+
+            const string marker = "/spreadsheets/d/";
+            var markerIndex = address.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+
+            if (markerIndex >= 0)
+            {
+                var idStartIndex = markerIndex + marker.Length;
+                var idEndIndex = address.IndexOfAny(new[] { '/', '?', '#' }, idStartIndex);
+                spreadsheetId = idEndIndex < 0 ? address.Substring(idStartIndex) : address.Substring(idStartIndex, idEndIndex - idStartIndex);
+            }
+            else
+            {
+                spreadsheetId = address;
+            }
+
+            spreadsheetId = spreadsheetId.Trim();
+
+            if (!IsValidSpreadsheetId(spreadsheetId))
+            {
+                spreadsheetId = null;
+                error = "Google Sheet URL or Spreadsheet ID is invalid.";
+                return false;
+            }
+
+            return true;
+        }
+
         public static async Task<List<GoogleSheetProjectItem>> GetProjectsAsync(GoogleSheetServer server)
         {
             ValidateServer(server);
@@ -29,7 +118,55 @@ namespace PschLib
                 throw new InvalidOperationException("Google Sheet response does not contain a project list.");
             }
 
+            if (!string.IsNullOrWhiteSpace(response.RegistrySpreadsheetId))
+            {
+                server.RegistrySpreadsheetId = response.RegistrySpreadsheetId.Trim();
+                server.RegistrySheetId = response.RegistrySheetId;
+                EditorUtility.SetDirty(server);
+                AssetDatabase.SaveAssets();
+            }
+
             return response.Projects;
+        }
+
+        public static async Task<GoogleSheetProjectItem> RegisterProjectAsync(GoogleSheetServer server, string rawKey, string rawSpreadsheetAddress, IReadOnlyList<GoogleSheetProjectItem> projects)
+        {
+            ValidateServer(server);
+
+            if (!TryValidateRegistrationInput(rawKey, rawSpreadsheetAddress, projects, out var key, out var spreadsheetId, out var error))
+            {
+                throw new InvalidOperationException(error);
+            }
+
+            var client = new GoogleSheetWebClient(server.WebAppUrl);
+            var response = await client.RegisterProjectAsync(key, spreadsheetId);
+
+            if (response == null)
+            {
+                throw new InvalidOperationException("Google Sheet returned no response.");
+            }
+
+            if (!response.Success)
+            {
+                throw new InvalidOperationException(string.IsNullOrWhiteSpace(response.Error) ? "Google Sheet project registration failed." : response.Error);
+            }
+
+            if (response.Project == null)
+            {
+                throw new InvalidOperationException("Google Sheet response does not contain the registered project.");
+            }
+
+            if (!string.Equals(response.Project.Key, key, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException($"Google Sheet returned project key '{response.Project.Key}' instead of '{key}'.");
+            }
+
+            if (!string.Equals(response.Project.SpreadsheetId, spreadsheetId, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException($"Google Sheet returned SpreadsheetId '{response.Project.SpreadsheetId}' instead of '{spreadsheetId}'.");
+            }
+
+            return response.Project;
         }
 
         public static async Task SynchronizeAsync(GoogleSheetProject project, GoogleSheetProjectItem remoteProject)
@@ -157,6 +294,24 @@ namespace PschLib
             }
 
             return null;
+        }
+
+        private static bool IsValidSpreadsheetId(string spreadsheetId)
+        {
+            if (string.IsNullOrWhiteSpace(spreadsheetId))
+            {
+                return false;
+            }
+
+            foreach (var character in spreadsheetId)
+            {
+                if (!char.IsLetterOrDigit(character) && character != '_' && character != '-')
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private static GoogleSheetProject CreateProject(GoogleSheetServer server, GoogleSheetProjectItem remoteProject)

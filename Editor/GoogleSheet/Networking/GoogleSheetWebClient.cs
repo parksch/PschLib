@@ -31,6 +31,17 @@ namespace PschLib
             return Deserialize<GoogleSheetProjectListResponse>(json);
         }
 
+        public async Task<GoogleSheetProjectRegistrationResponse> RegisterProjectAsync(string key, string spreadsheetId)
+        {
+            var form = new WWWForm();
+            form.AddField("action", "register");
+            form.AddField("key", RequireValue(key, nameof(key)));
+            form.AddField("spreadsheetId", RequireValue(spreadsheetId, nameof(spreadsheetId)));
+
+            var json = await PostFormJsonAsync(_webAppUrl, form);
+            return Deserialize<GoogleSheetProjectRegistrationResponse>(json);
+        }
+
         public async Task<GoogleSheetListResponse> GetSheetListAsync(string spreadsheetId)
         {
             var id = Escape(spreadsheetId, nameof(spreadsheetId));
@@ -59,18 +70,32 @@ namespace PschLib
 
         private static string Escape(string value, string parameterName)
         {
+            return UnityWebRequest.EscapeURL(RequireValue(value, parameterName));
+        }
+
+        private static string RequireValue(string value, string parameterName)
+        {
             if (string.IsNullOrWhiteSpace(value))
             {
                 throw new ArgumentException("The request parameter is empty.", parameterName);
             }
 
-            return UnityWebRequest.EscapeURL(value.Trim());
+            return value.Trim();
         }
 
         private static Task<string> GetJsonAsync(string url)
         {
+            return SendJsonAsync(UnityWebRequest.Get(url));
+        }
+
+        private static Task<string> PostFormJsonAsync(string url, WWWForm form)
+        {
+            return SendJsonAsync(UnityWebRequest.Post(url, form));
+        }
+
+        private static Task<string> SendJsonAsync(UnityWebRequest request)
+        {
             var completion = new TaskCompletionSource<string>();
-            var request = UnityWebRequest.Get(url);
             request.redirectLimit = 10;
 
             var operation = request.SendWebRequest();

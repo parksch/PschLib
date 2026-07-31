@@ -93,13 +93,18 @@ namespace PschLib
                 return true;
             }
 
-            if (kind == SheetTypeKind.Enum && typeName.Equals("shared-enum", StringComparison.OrdinalIgnoreCase))
+            if (kind == SheetTypeKind.Enum &&
+                (typeName.Equals("senum", StringComparison.OrdinalIgnoreCase) ||
+                 typeName.Equals("shared-enum", StringComparison.OrdinalIgnoreCase)))
             {
                 typeInfo = new SheetTypeInfo(kind, SheetEnumMode.Shared, null, null);
                 return true;
             }
 
-            if (TryGetGenericArgument(typeName, "shared-enum", out var sharedEnumName))
+            string sharedEnumName;
+
+            if (TryGetGenericArgument(typeName, "senum", out sharedEnumName) ||
+                TryGetGenericArgument(typeName, "shared-enum", out sharedEnumName))
             {
                 typeInfo = new SheetTypeInfo(kind, SheetEnumMode.Shared, sharedEnumName, null);
                 return true;
