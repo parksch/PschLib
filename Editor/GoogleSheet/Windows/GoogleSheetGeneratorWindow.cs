@@ -13,7 +13,6 @@ namespace PschLib
         private MessageType _statusType;
         private int _selectedRemoteProject;
         private bool _isBusy;
-        private bool _showHelp;
 
         private GoogleSheetSettings Settings => GoogleSheetSettings.instance;
         private GoogleSheetProject Project => Settings.Project;
@@ -38,12 +37,6 @@ namespace PschLib
         private void OnGUI()
         {
             DrawHeader();
-
-            if (_showHelp)
-            {
-                DrawHelp();
-            }
-
             EditorGUILayout.Space();
             DrawServer();
             EditorGUILayout.Space();
@@ -63,25 +56,10 @@ namespace PschLib
 
             if (GUILayout.Button("!", GUILayout.Width(26)))
             {
-                _showHelp = !_showHelp;
+                GoogleSheetDocumentation.Open();
             }
 
             EditorGUILayout.EndHorizontal();
-        }
-
-        private static void DrawHelp()
-        {
-            const string message =
-                "1. Select a Google Sheet Server and click Load Projects.\n" +
-                "2. Use Register New Project to add a Spreadsheet to the Registry.\n" +
-                "3. Select a project and click Use Selected Project.\n" +
-                "4. Select sheets and click Generate Selected.\n\n" +
-                "Open Registry opens the project Registry Spreadsheet.\n" +
-                "Open Sheet opens the selected data Spreadsheet.\n\n" +
-                "Types: string, int, long, float, double, bool, List<T>, enum, senum, List<senum<Name>>.\n" +
-                "Sheets or columns beginning with '&' are ignored.";
-
-            EditorGUILayout.HelpBox(message, MessageType.Info);
         }
 
         private void DrawServer()

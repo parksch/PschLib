@@ -14,7 +14,6 @@ namespace PschLib
         private string _spreadsheetAddress;
         private string _error;
         private bool _isRegistering;
-        private bool _showHelp;
 
         public static void Open(GoogleSheetServer server, IReadOnlyList<GoogleSheetProjectItem> projects, Action<GoogleSheetProjectItem> onRegistered)
         {
@@ -36,21 +35,10 @@ namespace PschLib
 
             if (GUILayout.Button("!", GUILayout.Width(26)))
             {
-                ToggleHelp();
+                GoogleSheetDocumentation.Open("register");
             }
 
             EditorGUILayout.EndHorizontal();
-
-            if (_showHelp)
-            {
-                const string message =
-                    "Project Name must be a valid C# identifier.\n" +
-                    "Use letters, numbers, or underscores, and do not start with a number.\n\n" +
-                    "Paste the full Google Sheet URL or enter its Spreadsheet ID.\n" +
-                    "Project names and Spreadsheets cannot be registered twice.";
-
-                EditorGUILayout.HelpBox(message, MessageType.Info);
-            }
 
             EditorGUILayout.Space();
 
@@ -85,14 +73,6 @@ namespace PschLib
                 EditorGUILayout.Space();
                 EditorGUILayout.HelpBox(_error, MessageType.Error);
             }
-        }
-
-        private void ToggleHelp()
-        {
-            _showHelp = !_showHelp;
-            var windowPosition = position;
-            windowPosition.height = _showHelp ? 285f : 155f;
-            position = windowPosition;
         }
 
         private async void Register()
