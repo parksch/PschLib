@@ -20,6 +20,8 @@ namespace PschLib
         private TState _pendingStateKey;
         private int _pendingPriority;
 
+        public event Action<TState, TState> StateChanged;
+
         public TContext Context => _context;
         public bool IsStarted => _isStarted;
 
@@ -80,6 +82,26 @@ namespace PschLib
             ProcessStateChangeRequest();
         }
 
+        public void Stop()
+        {
+            EnsureStarted();
+
+            try
+            {
+                _currentState.Exit(_context);
+            }
+            finally
+            {
+                _currentState = null;
+                _currentStateKey = default;
+                _isStarted = false;
+
+                _hasPendingState = false;
+                _pendingStateKey = default;
+                _pendingPriority = 0;
+            }
+        }
+
         public bool ChangeState(TState key)
         {
             return ChangeState(key, 0);
@@ -135,12 +157,15 @@ namespace PschLib
 
         private void ApplyStateChange(TState key, IState<TContext> nextState)
         {
+            var previousStateKey = _currentStateKey;
+
             _currentState.Exit(_context);
 
             _currentStateKey = key;
             _currentState = nextState;
 
             _currentState.Enter(_context);
+            StateChanged?.Invoke(previousStateKey, key);
         }
 
         private IState<TContext> GetRegisteredState(TState key)
