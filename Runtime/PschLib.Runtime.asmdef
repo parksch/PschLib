@@ -1,3 +1,4 @@
 {
-	"name": "PschLib.Runtime"
+    "name": "PschLib.Runtime",
+    "noEngineReferences": true
 }

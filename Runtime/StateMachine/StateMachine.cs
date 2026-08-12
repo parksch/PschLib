@@ -3,7 +3,11 @@ using System.Collections.Generic;
 
 namespace PschLib
 {
-    public sealed class StateMachine<TState, TContext> where TState : struct, Enum
+    public sealed class StateMachine<TState, TContext>
+#if UNITY_EDITOR
+        : IStateMachineDebugInfo
+#endif
+        where TState : struct, Enum
     {
         private readonly Dictionary<TState, IState<TContext>> _states = new Dictionary<TState, IState<TContext>>();
         private readonly TContext _context;
@@ -148,5 +152,26 @@ namespace PschLib
 
             return state;
         }
+
+#if UNITY_EDITOR
+        string IStateMachineDebugInfo.StateTypeName => typeof(TState).FullName ?? typeof(TState).Name;
+        string IStateMachineDebugInfo.CurrentStateName => _isStarted ? _currentStateKey.ToString() : "Not Started";
+        bool IStateMachineDebugInfo.IsStarted => _isStarted;
+
+        void IStateMachineDebugInfo.GetRegisteredStateNames(List<string> results)
+        {
+            if (results == null)
+            {
+                throw new ArgumentNullException(nameof(results));
+            }
+
+            results.Clear();
+
+            foreach (var key in _states.Keys)
+            {
+                results.Add(key.ToString());
+            }
+        }
+#endif
     }
 }

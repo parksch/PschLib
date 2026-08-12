@@ -36,7 +36,7 @@ namespace PschLib
                 return true;
             }
 
-            foreach (var guid in AssetDatabase.FindAssets("PschLib.Editor t:AssemblyDefinitionAsset"))
+            foreach (var guid in AssetDatabase.FindAssets("PschLib.Unity.Editor t:AssemblyDefinitionAsset"))
             {
                 var assemblyPath = AssetDatabase.GUIDToAssetPath(guid);
 
@@ -53,8 +53,7 @@ namespace PschLib
                 }
 
                 var absoluteAssemblyPath = Path.GetFullPath(Path.Combine(projectRoot, assemblyPath));
-                var editorDirectory = Directory.GetParent(absoluteAssemblyPath)?.FullName;
-                var packageRoot = string.IsNullOrWhiteSpace(editorDirectory) ? null : Directory.GetParent(editorDirectory)?.FullName;
+                var packageRoot = FindPackageRoot(absoluteAssemblyPath);
 
                 if (TryFindInRoot(packageRoot, out guidePath))
                 {
@@ -64,6 +63,23 @@ namespace PschLib
 
             guidePath = null;
             return false;
+        }
+
+        private static string FindPackageRoot(string path)
+        {
+            var directory = Directory.GetParent(path);
+
+            while (directory != null)
+            {
+                if (File.Exists(Path.Combine(directory.FullName, "package.json")))
+                {
+                    return directory.FullName;
+                }
+
+                directory = directory.Parent;
+            }
+
+            return null;
         }
 
         private static bool TryFindInRoot(string rootPath, out string guidePath)
