@@ -5,8 +5,6 @@ namespace PschLib
 {
     public sealed class StateMachine<TState, TContext> where TState : struct, Enum
     {
-        private const int MaxTransitionsPerProcess = 32;
-
         private readonly Dictionary<TState, IState<TContext>> _states = new Dictionary<TState, IState<TContext>>();
         private readonly TContext _context;
 
@@ -14,9 +12,9 @@ namespace PschLib
         private TState _currentStateKey;
         private bool _isStarted;
 
-        private bool _isExecutingCallback;
         private bool _hasPendingState;
         private TState _pendingStateKey;
+        private int _pendingPriority;
 
         public TContext Context => _context;
         public bool IsStarted => _isStarted;
@@ -68,63 +66,39 @@ namespace PschLib
             _currentState = state;
             _isStarted = true;
 
-            _isExecutingCallback = true;
-
-            try
-            {
-                _currentState.Enter(_context);
-            }
-            finally
-            {
-                _isExecutingCallback = false;
-            }
-
-            ProcessPendingStateChanges();
+            _currentState.Enter(_context);
         }
 
         public void Update()
         {
             EnsureStarted();
-
-            _isExecutingCallback = true;
-
-            try
-            {
-                _currentState.Update(_context);
-            }
-            finally
-            {
-                _isExecutingCallback = false;
-            }
-
-            ProcessPendingStateChanges();
+            _currentState.Update(_context);
+            ProcessStateChangeRequest();
         }
 
         public bool ChangeState(TState key)
         {
+            return ChangeState(key, 0);
+        }
+
+        public bool ChangeState(TState key, int priority)
+        {
             EnsureStarted();
-
-            if (_isExecutingCallback)
-            {
-                GetRegisteredState(key);
-
-                if (EqualityComparer<TState>.Default.Equals(_currentStateKey, key))
-                {
-                    return false;
-                }
-
-                _pendingStateKey = key;
-                _hasPendingState = true;
-                return true;
-            }
+            GetRegisteredState(key);
 
             if (EqualityComparer<TState>.Default.Equals(_currentStateKey, key))
             {
                 return false;
             }
 
-            ChangeStateImmediately(key);
-            ProcessPendingStateChanges();
+            if (_hasPendingState && priority <= _pendingPriority)
+            {
+                return false;
+            }
+
+            _pendingStateKey = key;
+            _pendingPriority = priority;
+            _hasPendingState = true;
             return true;
         }
 
@@ -136,50 +110,33 @@ namespace PschLib
             }
         }
 
-        private void ProcessPendingStateChanges()
+        private void ProcessStateChangeRequest()
         {
-            var transitionCount = 0;
-
-            while (_hasPendingState)
+            if (!_hasPendingState)
             {
-                if (++transitionCount > MaxTransitionsPerProcess)
-                {
-                    _hasPendingState = false;
-                    throw new InvalidOperationException(
-                        $"State transition limit exceeded: {MaxTransitionsPerProcess}.");
-                }
-
-                var key = _pendingStateKey;
-                _hasPendingState = false;
-
-                if (EqualityComparer<TState>.Default.Equals(_currentStateKey, key))
-                {
-                    continue;
-                }
-
-                ChangeStateImmediately(key);
+                return;
             }
+
+            var key = _pendingStateKey;
+            _hasPendingState = false;
+            _pendingPriority = 0;
+
+            if (EqualityComparer<TState>.Default.Equals(_currentStateKey, key))
+            {
+                return;
+            }
+
+            ApplyStateChange(key, GetRegisteredState(key));
         }
 
-        private void ChangeStateImmediately(TState key)
+        private void ApplyStateChange(TState key, IState<TContext> nextState)
         {
-            var nextState = GetRegisteredState(key);
+            _currentState.Exit(_context);
 
-            _isExecutingCallback = true;
+            _currentStateKey = key;
+            _currentState = nextState;
 
-            try
-            {
-                _currentState.Exit(_context);
-
-                _currentStateKey = key;
-                _currentState = nextState;
-
-                _currentState.Enter(_context);
-            }
-            finally
-            {
-                _isExecutingCallback = false;
-            }
+            _currentState.Enter(_context);
         }
 
         private IState<TContext> GetRegisteredState(TState key)
