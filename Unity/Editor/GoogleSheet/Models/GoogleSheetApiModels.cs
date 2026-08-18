@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace PschLib
+namespace PschLib.GoogleSheets
 {
     [Serializable]
     internal sealed class GoogleSheetProjectListResponse

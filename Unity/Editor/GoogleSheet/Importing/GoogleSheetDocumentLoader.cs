@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace PschLib
+namespace PschLib.GoogleSheets
 {
     internal static class GoogleSheetDocumentLoader
     {

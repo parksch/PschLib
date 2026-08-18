@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.Globalization;
 
-namespace PschLib
+namespace PschLib.GoogleSheets
 {
     public static class SheetValueParser
     {

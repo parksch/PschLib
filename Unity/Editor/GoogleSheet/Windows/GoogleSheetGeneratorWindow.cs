@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-namespace PschLib
+namespace PschLib.GoogleSheets
 {
     public sealed class GoogleSheetGeneratorWindow : EditorWindow
     {

@@ -3,7 +3,7 @@ using UnityEditor.Build.Reporting;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace PschLib
+namespace PschLib.Unity.Debugging
 {
     public sealed class StateMachineDebugViewerBuildProcessor : IProcessSceneWithReport
     {

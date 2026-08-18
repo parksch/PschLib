@@ -1,7 +1,7 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
 
-namespace PschLib
+namespace PschLib.StateMachines
 {
     public interface IStateMachineDebugInfo
     {

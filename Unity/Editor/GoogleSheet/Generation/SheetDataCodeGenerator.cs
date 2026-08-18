@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace PschLib
+namespace PschLib.GoogleSheets
 {
     public static class SheetDataCodeGenerator
     {

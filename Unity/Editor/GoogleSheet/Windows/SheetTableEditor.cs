@@ -4,7 +4,7 @@ using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 
-namespace PschLib
+namespace PschLib.GoogleSheets
 {
     [CustomEditor(typeof(SheetTableBase), true)]
     public sealed class SheetTableEditor : UnityEditor.Editor

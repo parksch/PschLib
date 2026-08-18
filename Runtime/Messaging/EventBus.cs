@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace PschLib
+namespace PschLib.Messaging
 {
     public static class EventBus
     {

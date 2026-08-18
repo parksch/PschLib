@@ -1,7 +1,9 @@
 using UnityEngine;
+using UnityEngine.Scripting.APIUpdating;
 
-namespace PschLib
+namespace PschLib.Unity.Lifecycle
 {
+    [MovedFrom(true, sourceNamespace: "PschLib", sourceAssembly: "PschLib.Unity.Runtime")]
     public class Singleton<T> : MonoBehaviour where T : Singleton<T>
     {
         public static T Instance { get; private set; }

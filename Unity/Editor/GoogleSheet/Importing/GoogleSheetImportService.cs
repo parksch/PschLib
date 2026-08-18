@@ -1,7 +1,7 @@
 using System;
 using System.Threading.Tasks;
 
-namespace PschLib
+namespace PschLib.GoogleSheets
 {
     internal static class GoogleSheetImportService
     {

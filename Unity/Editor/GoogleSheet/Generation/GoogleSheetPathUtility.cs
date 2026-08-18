@@ -3,7 +3,7 @@ using System.IO;
 using UnityEditor;
 using UnityEngine;
 
-namespace PschLib
+namespace PschLib.GoogleSheets
 {
     internal static class GoogleSheetPathUtility
     {

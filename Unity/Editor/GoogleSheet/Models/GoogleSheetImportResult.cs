@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace PschLib
+namespace PschLib.GoogleSheets
 {
     internal sealed class GoogleSheetImportResult
     {

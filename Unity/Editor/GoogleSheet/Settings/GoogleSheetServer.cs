@@ -1,7 +1,9 @@
 using UnityEngine;
+using UnityEngine.Scripting.APIUpdating;
 
-namespace PschLib
+namespace PschLib.GoogleSheets
 {
+    [MovedFrom(true, sourceNamespace: "PschLib", sourceAssembly: "PschLib.Unity.Editor")]
     [CreateAssetMenu(fileName = "GoogleSheetServer", menuName = "PschLib/Google Sheet Server")]
     public sealed class GoogleSheetServer : ScriptableObject
     {

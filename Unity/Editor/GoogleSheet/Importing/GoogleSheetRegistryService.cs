@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEditor;
 
-namespace PschLib
+namespace PschLib.GoogleSheets
 {
     internal static class GoogleSheetRegistryService
     {

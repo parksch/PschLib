@@ -1,4 +1,5 @@
 {
     "name": "PschLib.Runtime",
+    "rootNamespace": "PschLib",
     "noEngineReferences": true
 }

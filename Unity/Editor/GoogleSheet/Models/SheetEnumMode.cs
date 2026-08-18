@@ -1,4 +1,4 @@
-namespace PschLib
+namespace PschLib.GoogleSheets
 {
     public enum SheetEnumMode
     {

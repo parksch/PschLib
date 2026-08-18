@@ -4,7 +4,7 @@ using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 
-namespace PschLib
+namespace PschLib.GoogleSheets
 {
     internal static class SheetAssetWriter
     {

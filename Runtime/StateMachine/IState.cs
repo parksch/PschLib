@@ -1,4 +1,4 @@
-namespace PschLib
+namespace PschLib.StateMachines
 {
     public interface IState<TContext>
     {

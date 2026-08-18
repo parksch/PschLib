@@ -1,7 +1,9 @@
 using UnityEditor;
+using UnityEngine.Scripting.APIUpdating;
 
-namespace PschLib
+namespace PschLib.GoogleSheets
 {
+    [MovedFrom(true, sourceNamespace: "PschLib", sourceAssembly: "PschLib.Unity.Editor")]
     [FilePath("ProjectSettings/PschGoogleSheetSettings.asset", FilePathAttribute.Location.ProjectFolder)]
     public sealed class GoogleSheetSettings : ScriptableSingleton<GoogleSheetSettings>
     {

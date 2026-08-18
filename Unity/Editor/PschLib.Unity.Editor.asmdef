@@ -1,6 +1,6 @@
 {
     "name": "PschLib.Unity.Editor",
-    "rootNamespace": "",
+    "rootNamespace": "PschLib",
     "references": [
         "GUID:911c29e3ddec356429bef19ddd8ef81f",
         "GUID:2e5dd204897d4087a14fae809f1cd8ee"

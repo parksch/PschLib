@@ -1,8 +1,10 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Scripting.APIUpdating;
 
-namespace PschLib
+namespace PschLib.GoogleSheets
 {
+    [MovedFrom(true, sourceNamespace: "PschLib", sourceAssembly: "PschLib.Unity.Editor")]
     [CreateAssetMenu(fileName = "GoogleSheetProject", menuName = "PschLib/Google Sheet Project")]
     public sealed class GoogleSheetProject : ScriptableObject
     {

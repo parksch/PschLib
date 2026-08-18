@@ -1,6 +1,6 @@
 using System;
 
-namespace PschLib
+namespace PschLib.GoogleSheets
 {
     public sealed class SheetScalarTypeDefinition
     {

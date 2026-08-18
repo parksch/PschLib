@@ -1,9 +1,10 @@
 using System.Collections.Generic;
 using System.Reflection;
+using PschLib.StateMachines;
 using UnityEditor;
 using UnityEngine;
 
-namespace PschLib
+namespace PschLib.Unity.Debugging
 {
     [CustomEditor(typeof(StateMachineDebugViewer))]
     public sealed class StateMachineDebugViewerEditor : UnityEditor.Editor

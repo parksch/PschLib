@@ -1,9 +1,12 @@
 #if UNITY_EDITOR
 using System.Reflection;
+using PschLib.StateMachines;
 using UnityEngine;
+using UnityEngine.Scripting.APIUpdating;
 
-namespace PschLib
+namespace PschLib.Unity.Debugging
 {
+    [MovedFrom(true, sourceNamespace: "PschLib", sourceAssembly: "PschLib.Unity.Runtime")]
     [DisallowMultipleComponent]
     [AddComponentMenu("PschLib/Debug/State Machine Debug Viewer")]
     public sealed class StateMachineDebugViewer : MonoBehaviour

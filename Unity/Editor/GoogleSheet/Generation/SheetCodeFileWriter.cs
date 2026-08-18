@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Text;
 
-namespace PschLib
+namespace PschLib.GoogleSheets
 {
     internal static class SheetCodeFileWriter
     {
@@ -141,7 +141,7 @@ namespace PschLib
             builder.AppendLine();
             builder.AppendLine($"namespace {targetNamespace}");
             builder.AppendLine("{");
-            builder.AppendLine($"    public sealed partial class {className}Table : PschLib.SheetTableBase, ISerializationCallbackReceiver");
+            builder.AppendLine($"    public sealed partial class {className}Table : PschLib.GoogleSheets.SheetTableBase, ISerializationCallbackReceiver");
             builder.AppendLine("    {");
             builder.AppendLine($"        [SerializeField] private List<{className}> rows = new List<{className}>();");
             builder.AppendLine($"        [NonSerialized] private Dictionary<string, {className}> byId;");

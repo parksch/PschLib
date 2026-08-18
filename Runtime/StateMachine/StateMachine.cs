@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace PschLib
+namespace PschLib.StateMachines
 {
     public sealed class StateMachine<TState, TContext>
 #if UNITY_EDITOR
