@@ -9,6 +9,9 @@ namespace PschLib.Messaging
         private static readonly List<Listener> PendingListeners = new List<Listener>();
         private static long _nextListenerId;
         private static int _publishDepth;
+#if UNITY_EDITOR
+        public static event Action DebugListenersChanged;
+#endif
 
         public static IDisposable Subscribe<TEvent>(Action<TEvent> handler) where TEvent : struct
         {
@@ -24,6 +27,7 @@ namespace PschLib.Messaging
             if (_publishDepth == 0)
             {
                 AddListener(listener);
+                NotifyDebugListenersChanged();
             }
             else
             {
@@ -70,6 +74,7 @@ namespace PschLib.Messaging
         {
             Listeners.Clear();
             PendingListeners.Clear();
+            NotifyDebugListenersChanged();
         }
 
 #if UNITY_EDITOR
@@ -135,6 +140,8 @@ namespace PschLib.Messaging
                     }
                 }
 
+                NotifyDebugListenersChanged();
+
                 return;
             }
 
@@ -169,6 +176,8 @@ namespace PschLib.Messaging
 
         private static void ApplyPendingChanges()
         {
+            var hasPendingListeners = PendingListeners.Count > 0;
+
             foreach (var pair in Listeners)
             {
                 RemoveDisposed(pair.Value);
@@ -184,6 +193,19 @@ namespace PschLib.Messaging
             }
 
             PendingListeners.Clear();
+
+            if (hasPendingListeners)
+            {
+                NotifyDebugListenersChanged();
+            }
+        }
+
+        [System.Diagnostics.Conditional("UNITY_EDITOR")]
+        private static void NotifyDebugListenersChanged()
+        {
+#if UNITY_EDITOR
+            DebugListenersChanged?.Invoke();
+#endif
         }
 
         private static void RemoveDisposed(List<Listener> listeners)

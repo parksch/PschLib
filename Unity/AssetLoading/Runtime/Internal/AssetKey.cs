@@ -7,6 +7,9 @@ namespace PschLib.AssetLoading.Internal
         private readonly string _address;
         private readonly Type _assetType;
 
+        public string Address => _address;
+        public Type AssetType => _assetType;
+
         public AssetKey(string address, Type assetType)
         {
             _address = address;

@@ -1,5 +1,5 @@
+using System;
 using System.Collections.Generic;
-using System.Reflection;
 using PschLib.StateMachines;
 using UnityEditor;
 using UnityEngine;
@@ -7,79 +7,26 @@ using UnityEngine;
 namespace PschLib.Unity.Debugging
 {
     [CustomEditor(typeof(StateMachineDebugViewer))]
-    public sealed class StateMachineDebugViewerEditor : UnityEditor.Editor
+    public sealed class StateMachineDebugViewerEditor
+        : DebugViewerEditorBase<StateMachineDebugViewer, IStateMachineDebugInfo>
     {
         private readonly List<string> _stateNames = new List<string>();
 
-        public override void OnInspectorGUI()
+        protected override string EmptyMessage => "No StateMachine was found on this GameObject.";
+
+        protected override void Subscribe(IStateMachineDebugInfo debugInfo, Action callback)
         {
-            var viewer = (StateMachineDebugViewer)target;
-            var foundCount = DrawStateMachinesOnGameObject(viewer.gameObject);
-
-            if (foundCount == 0)
-            {
-                EditorGUILayout.HelpBox(
-                    "No StateMachine was found on this GameObject.",
-                    MessageType.Info);
-            }
-
+            debugInfo.DebugStateChanged += callback;
         }
 
-        public override bool RequiresConstantRepaint()
+        protected override void Unsubscribe(IStateMachineDebugInfo debugInfo, Action callback)
         {
-            return EditorApplication.isPlaying;
+            debugInfo.DebugStateChanged -= callback;
         }
 
-        private int DrawStateMachinesOnGameObject(GameObject gameObject)
+        protected override void DrawDebugInfo(MonoBehaviour component, string fieldName, IStateMachineDebugInfo debugInfo)
         {
-            var foundCount = 0;
-            var components = gameObject.GetComponents<MonoBehaviour>();
-
-            for (var i = 0; i < components.Length; i++)
-            {
-                var component = components[i];
-
-                if (component == null || component is StateMachineDebugViewer)
-                {
-                    continue;
-                }
-
-                foundCount += DrawStateMachines(component);
-            }
-
-            return foundCount;
-        }
-
-        private int DrawStateMachines(MonoBehaviour component)
-        {
-            var foundCount = 0;
-            var type = component.GetType();
-
-            while (type != null && type != typeof(MonoBehaviour))
-            {
-                var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
-
-                for (var i = 0; i < fields.Length; i++)
-                {
-                    var debugInfo = fields[i].GetValue(component) as IStateMachineDebugInfo;
-
-                    if (debugInfo == null)
-                    {
-                        continue;
-                    }
-
-                    DrawStateMachine(component, fields[i].Name, debugInfo);
-                    foundCount++;
-                }
-
-                type = type.BaseType;
-            }
-
-            return foundCount;
-        }
-
-        private void DrawStateMachine(MonoBehaviour component, string fieldName, IStateMachineDebugInfo debugInfo)
-        {
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             EditorGUILayout.LabelField($"{component.GetType().Name}.{fieldName}", EditorStyles.boldLabel);
             EditorGUILayout.LabelField("State Type", debugInfo.StateTypeName);
             EditorGUILayout.LabelField("Started", debugInfo.IsStarted.ToString());
@@ -95,6 +42,7 @@ namespace PschLib.Unity.Debugging
             }
 
             EditorGUI.indentLevel--;
+            EditorGUILayout.EndVertical();
             EditorGUILayout.Space();
         }
     }

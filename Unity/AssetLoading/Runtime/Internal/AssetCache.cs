@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+#if UNITY_EDITOR
+using PschLib.AssetLoading.Debugging;
+#endif
 using Object = UnityEngine.Object;
 
 namespace PschLib.AssetLoading.Internal
@@ -147,7 +150,7 @@ namespace PschLib.AssetLoading.Internal
             return AssetUnloadResult.Unloaded;
         }
 
-        public void ClearUnused(Func<AssetKey, bool> canUnload, Action<Object> unload)
+        public int ClearUnused(Func<AssetKey, bool> canUnload, Action<Object> unload)
         {
             if (canUnload == null)
             {
@@ -176,6 +179,8 @@ namespace PschLib.AssetLoading.Internal
                 _entries.Remove(key);
                 unload(asset);
             }
+
+            return unusedKeys.Count;
         }
 
         public void Clear(Action<Object> unload)
@@ -192,6 +197,21 @@ namespace PschLib.AssetLoading.Internal
 
             _entries.Clear();
         }
+
+#if UNITY_EDITOR
+        public void GetDebugEntries(List<AssetLoaderDebugEntry> entries)
+        {
+            entries.Clear();
+
+            foreach (var pair in _entries)
+            {
+                entries.Add(new AssetLoaderDebugEntry(
+                    pair.Key.Address,
+                    pair.Key.AssetType.Name,
+                    pair.Value.ReferenceCount));
+            }
+        }
+#endif
 
         private sealed class AssetCacheEntry
         {

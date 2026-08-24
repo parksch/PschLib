@@ -21,6 +21,9 @@ namespace PschLib.StateMachines
         private int _pendingPriority;
 
         public event Action<TState, TState> StateChanged;
+#if UNITY_EDITOR
+        public event Action DebugStateChanged;
+#endif
 
         public TContext Context => _context;
         public bool IsStarted => _isStarted;
@@ -57,6 +60,7 @@ namespace PschLib.StateMachines
             }
 
             _states.Add(key, state);
+            NotifyDebugStateChanged();
         }
 
         public void Start(TState key)
@@ -73,6 +77,7 @@ namespace PschLib.StateMachines
             _isStarted = true;
 
             _currentState.Enter(_context);
+            NotifyDebugStateChanged();
         }
 
         public void Update()
@@ -99,6 +104,7 @@ namespace PschLib.StateMachines
                 _hasPendingState = false;
                 _pendingStateKey = default;
                 _pendingPriority = 0;
+                NotifyDebugStateChanged();
             }
         }
 
@@ -166,6 +172,7 @@ namespace PschLib.StateMachines
 
             _currentState.Enter(_context);
             StateChanged?.Invoke(previousStateKey, key);
+            NotifyDebugStateChanged();
         }
 
         private IState<TContext> GetRegisteredState(TState key)
@@ -176,6 +183,14 @@ namespace PschLib.StateMachines
             }
 
             return state;
+        }
+
+        [System.Diagnostics.Conditional("UNITY_EDITOR")]
+        private void NotifyDebugStateChanged()
+        {
+#if UNITY_EDITOR
+            DebugStateChanged?.Invoke();
+#endif
         }
 
 #if UNITY_EDITOR

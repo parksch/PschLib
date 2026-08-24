@@ -1,10 +1,12 @@
+using PschLib.AssetLoading.Debugging;
+using PschLib.Unity.Debugging;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEngine.SceneManagement;
 
-namespace PschLib.Unity.Debugging
+namespace PschLib.AssetLoading.Editor
 {
-    public sealed class StateMachineDebugViewerBuildProcessor : IProcessSceneWithReport
+    public sealed class AssetLoaderDebugViewerBuildProcessor : IProcessSceneWithReport
     {
         public int callbackOrder => 0;
 
@@ -12,7 +14,7 @@ namespace PschLib.Unity.Debugging
         {
             if (report != null)
             {
-                DebugViewerBuildUtility.RemoveFromScene<StateMachineDebugViewer>(scene);
+                DebugViewerBuildUtility.RemoveFromScene<AssetLoaderDebugViewer>(scene);
             }
         }
     }

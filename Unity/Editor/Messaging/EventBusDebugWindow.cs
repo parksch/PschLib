@@ -17,12 +17,14 @@ namespace PschLib.Messaging
             GetWindow<EventBusDebugWindow>("Event Bus Debugger");
         }
 
-        private void Update()
+        private void OnEnable()
         {
-            if (EditorApplication.isPlaying)
-            {
-                Repaint();
-            }
+            EventBus.DebugListenersChanged += Repaint;
+        }
+
+        private void OnDisable()
+        {
+            EventBus.DebugListenersChanged -= Repaint;
         }
 
         private void OnGUI()
