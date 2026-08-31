@@ -15,9 +15,15 @@
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [
+        "PSCHLIB_UNITASK",
         "PSCHLIB_ADDRESSABLES"
     ],
     "versionDefines": [
+        {
+            "name": "com.cysharp.unitask",
+            "expression": "",
+            "define": "PSCHLIB_UNITASK"
+        },
         {
             "name": "com.unity.addressables",
             "expression": "",
