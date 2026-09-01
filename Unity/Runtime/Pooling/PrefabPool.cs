@@ -11,14 +11,34 @@ namespace PschLib.Unity.Pooling
         private readonly Vector3 _initialLocalScale;
         private readonly int _maxInactiveCount;
 
-        private readonly Stack<GameObject> _inactiveObjects = new Stack<GameObject>();
-        private readonly HashSet<GameObject> _activeObjects = new HashSet<GameObject>();
+        private readonly Queue<GameObject> _inactiveObjects = new Queue<GameObject>();
+        private readonly HashSet<GameObject> _inUseObjects = new HashSet<GameObject>();
 
-        public int ActiveCount => _activeObjects.Count;
+        public int InUseCount => _inUseObjects.Count;
         public int InactiveCount => _inactiveObjects.Count;
-        public int TotalCount => ActiveCount + InactiveCount;
+        public int TotalCount => InUseCount + InactiveCount;
+        internal string PrefabName => _prefab != null ? _prefab.name : "Missing";
+        internal int MaxInactiveCount => _maxInactiveCount;
 
-        public PrefabPool(GameObject prefab, Transform storageParent, int maxInactiveCount = 30)
+        internal void RemoveDestroyedReferences()
+        {
+            RemoveDestroyedObjects();
+        }
+
+        internal void RemoveDestroyedInUseReferences()
+        {
+            _inUseObjects.RemoveWhere(instance => instance == null);
+        }
+
+        internal void DestroyStorageParent()
+        {
+            if (_storageParent != null)
+            {
+                UnityEngine.Object.Destroy(_storageParent.gameObject);
+            }
+        }
+
+        public PrefabPool(GameObject prefab, Transform storageParent, int maxInactiveCount = 50)
         {
             if (prefab == null)
             {
@@ -46,7 +66,27 @@ namespace PschLib.Unity.Pooling
             _maxInactiveCount = maxInactiveCount;
         }
 
-        public GameObject Spawn(Transform parent = null)
+        public void Prewarm(int count)
+        {
+            if (count < 0 || count > _maxInactiveCount)
+            {
+                throw new ArgumentOutOfRangeException(nameof(count), $"Must be between 0 and {_maxInactiveCount}.");
+            }
+
+            ValidateStorageParent();
+            RemoveDestroyedObjects();
+
+            int createCount = count - _inactiveObjects.Count;
+
+            for (int i = 0; i < createCount; i++)
+            {
+                GameObject instance = UnityEngine.Object.Instantiate(_prefab, _storageParent);
+                instance.SetActive(false);
+                _inactiveObjects.Enqueue(instance);
+            }
+        }
+
+        public GameObject Get(Transform parent = null)
         {
             ValidateStorageParent();
 
@@ -54,7 +94,7 @@ namespace PschLib.Unity.Pooling
 
             while (_inactiveObjects.Count > 0)
             {
-                instance = _inactiveObjects.Pop();
+                instance = _inactiveObjects.Dequeue();
 
                 if (instance != null)
                 {
@@ -72,29 +112,28 @@ namespace PschLib.Unity.Pooling
             instance.transform.SetPositionAndRotation(_storageParent.position, _storageParent.rotation);
             instance.transform.localScale = _initialLocalScale;
 
-            _activeObjects.Add(instance);
-            instance.SetActive(true);
+            _inUseObjects.Add(instance);
 
             return instance;
         }
 
-        public bool Despawn(GameObject instance)
+        public bool Return(GameObject instance)
         {
             if (instance == null)
             {
-                _activeObjects.Remove(instance);
+                RemoveDestroyedObjects();
                 Debug.LogWarning("Cannot return a null or destroyed object to the pool.");
                 return false;
             }
 
-            if (!_activeObjects.Contains(instance))
+            if (!_inUseObjects.Contains(instance))
             {
                 Debug.LogWarning("Object was already returned or does not belong to this pool.", instance);
                 return false;
             }
 
             ValidateStorageParent();
-            _activeObjects.Remove(instance);
+            _inUseObjects.Remove(instance);
             instance.SetActive(false);
 
             if (instance == null)
@@ -104,18 +143,57 @@ namespace PschLib.Unity.Pooling
 
             if (_inactiveObjects.Count >= _maxInactiveCount)
             {
-                UnityEngine.Object.Destroy(instance);
-                return true;
+                RemoveDestroyedInactiveObjects();
+
+                if (_inactiveObjects.Count >= _maxInactiveCount)
+                {
+                    UnityEngine.Object.Destroy(instance);
+                    return true;
+                }
             }
 
             instance.transform.SetParent(_storageParent, false);
 
             if (instance != null)
             {
-                _inactiveObjects.Push(instance);
+                _inactiveObjects.Enqueue(instance);
             }
 
             return true;
+        }
+
+        public void Clear()
+        {
+            while (_inactiveObjects.Count > 0)
+            {
+                GameObject instance = _inactiveObjects.Dequeue();
+
+                if (instance != null)
+                {
+                    UnityEngine.Object.Destroy(instance);
+                }
+            }
+        }
+
+        private void RemoveDestroyedObjects()
+        {
+            RemoveDestroyedInUseReferences();
+            RemoveDestroyedInactiveObjects();
+        }
+
+        private void RemoveDestroyedInactiveObjects()
+        {
+            int inactiveCount = _inactiveObjects.Count;
+
+            for (int i = 0; i < inactiveCount; i++)
+            {
+                GameObject instance = _inactiveObjects.Dequeue();
+
+                if (instance != null)
+                {
+                    _inactiveObjects.Enqueue(instance);
+                }
+            }
         }
 
         private void ValidateStorageParent()
