@@ -139,7 +139,7 @@ namespace PschLib.Unity.Pooling
             return true;
         }
 
-        public GameObject Get(string key, Transform parent = null)
+        public GameObject Get(string key, Transform parent = null, bool activate = false)
         {
             if (string.IsNullOrWhiteSpace(key))
             {
@@ -153,7 +153,7 @@ namespace PschLib.Unity.Pooling
                 return null;
             }
 
-            GameObject instance = pool.Get(parent);
+            GameObject instance = pool.GetForManager(parent);
 
             if (_inUseInstancePools.ContainsKey(instance))
             {
@@ -161,6 +161,12 @@ namespace PschLib.Unity.Pooling
             }
 
             _inUseInstancePools.Add(instance, pool);
+
+            if (activate)
+            {
+                instance.SetActive(true);
+            }
+
             NotifyDebugStateChanged();
             return instance;
         }

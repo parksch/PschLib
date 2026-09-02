@@ -86,7 +86,17 @@ namespace PschLib.Unity.Pooling
             }
         }
 
-        public GameObject Get(Transform parent = null)
+        public GameObject Get(Transform parent = null, bool activate = false)
+        {
+            return GetInternal(parent, activate);
+        }
+
+        internal GameObject GetForManager(Transform parent = null)
+        {
+            return GetInternal(parent, false);
+        }
+
+        private GameObject GetInternal(Transform parent, bool activate)
         {
             ValidateStorageParent();
 
@@ -113,6 +123,7 @@ namespace PschLib.Unity.Pooling
             instance.transform.localScale = _initialLocalScale;
 
             _inUseObjects.Add(instance);
+            instance.SetActive(activate);
 
             return instance;
         }
