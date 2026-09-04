@@ -9,31 +9,31 @@ namespace PschLib.StateMachines
 #endif
         where TState : struct, Enum
     {
-        private readonly Dictionary<TState, IState<TContext>> _states = new Dictionary<TState, IState<TContext>>();
-        private readonly TContext _context;
+        private readonly Dictionary<TState, IState<TContext>> states = new Dictionary<TState, IState<TContext>>();
+        private readonly TContext context;
 
-        private IState<TContext> _currentState;
-        private TState _currentStateKey;
-        private bool _isStarted;
+        private IState<TContext> currentState;
+        private TState currentStateKey;
+        private bool isStarted;
 
-        private bool _hasPendingState;
-        private TState _pendingStateKey;
-        private int _pendingPriority;
+        private bool hasPendingState;
+        private TState pendingStateKey;
+        private int pendingPriority;
 
         public event Action<TState, TState> StateChanged;
 #if UNITY_EDITOR
         public event Action DebugStateChanged;
 #endif
 
-        public TContext Context => _context;
-        public bool IsStarted => _isStarted;
+        public TContext Context => context;
+        public bool IsStarted => isStarted;
 
         public TState CurrentStateKey
         {
             get
             {
                 EnsureStarted();
-                return _currentStateKey;
+                return currentStateKey;
             }
         }
 
@@ -44,7 +44,7 @@ namespace PschLib.StateMachines
                 throw new ArgumentNullException(nameof(context));
             }
 
-            _context = context;
+            this.context = context;
         }
 
         public void Register(TState key, IState<TContext> state)
@@ -54,36 +54,36 @@ namespace PschLib.StateMachines
                 throw new ArgumentNullException(nameof(state));
             }
 
-            if (_states.ContainsKey(key))
+            if (states.ContainsKey(key))
             {
                 throw new ArgumentException($"State '{key}' is already registered.", nameof(key));
             }
 
-            _states.Add(key, state);
+            states.Add(key, state);
             NotifyDebugStateChanged();
         }
 
         public void Start(TState key)
         {
-            if (_isStarted)
+            if (isStarted)
             {
                 throw new InvalidOperationException("StateMachine is already started.");
             }
 
             var state = GetRegisteredState(key);
 
-            _currentStateKey = key;
-            _currentState = state;
-            _isStarted = true;
+            currentStateKey = key;
+            currentState = state;
+            isStarted = true;
 
-            _currentState.Enter(_context);
+            currentState.Enter(context);
             NotifyDebugStateChanged();
         }
 
         public void Update()
         {
             EnsureStarted();
-            _currentState.Update(_context);
+            currentState.Update(context);
             ProcessStateChangeRequest();
         }
 
@@ -93,17 +93,17 @@ namespace PschLib.StateMachines
 
             try
             {
-                _currentState.Exit(_context);
+                currentState.Exit(context);
             }
             finally
             {
-                _currentState = null;
-                _currentStateKey = default;
-                _isStarted = false;
+                currentState = null;
+                currentStateKey = default;
+                isStarted = false;
 
-                _hasPendingState = false;
-                _pendingStateKey = default;
-                _pendingPriority = 0;
+                hasPendingState = false;
+                pendingStateKey = default;
+                pendingPriority = 0;
                 NotifyDebugStateChanged();
             }
         }
@@ -118,25 +118,25 @@ namespace PschLib.StateMachines
             EnsureStarted();
             GetRegisteredState(key);
 
-            if (EqualityComparer<TState>.Default.Equals(_currentStateKey, key))
+            if (EqualityComparer<TState>.Default.Equals(currentStateKey, key))
             {
                 return false;
             }
 
-            if (_hasPendingState && priority <= _pendingPriority)
+            if (hasPendingState && priority <= pendingPriority)
             {
                 return false;
             }
 
-            _pendingStateKey = key;
-            _pendingPriority = priority;
-            _hasPendingState = true;
+            pendingStateKey = key;
+            pendingPriority = priority;
+            hasPendingState = true;
             return true;
         }
 
         private void EnsureStarted()
         {
-            if (!_isStarted)
+            if (!isStarted)
             {
                 throw new InvalidOperationException("StateMachine is not started.");
             }
@@ -144,16 +144,16 @@ namespace PschLib.StateMachines
 
         private void ProcessStateChangeRequest()
         {
-            if (!_hasPendingState)
+            if (!hasPendingState)
             {
                 return;
             }
 
-            var key = _pendingStateKey;
-            _hasPendingState = false;
-            _pendingPriority = 0;
+            var key = pendingStateKey;
+            hasPendingState = false;
+            pendingPriority = 0;
 
-            if (EqualityComparer<TState>.Default.Equals(_currentStateKey, key))
+            if (EqualityComparer<TState>.Default.Equals(currentStateKey, key))
             {
                 return;
             }
@@ -163,21 +163,21 @@ namespace PschLib.StateMachines
 
         private void ApplyStateChange(TState key, IState<TContext> nextState)
         {
-            var previousStateKey = _currentStateKey;
+            var previousStateKey = currentStateKey;
 
-            _currentState.Exit(_context);
+            currentState.Exit(context);
 
-            _currentStateKey = key;
-            _currentState = nextState;
+            currentStateKey = key;
+            currentState = nextState;
 
-            _currentState.Enter(_context);
+            currentState.Enter(context);
             StateChanged?.Invoke(previousStateKey, key);
             NotifyDebugStateChanged();
         }
 
         private IState<TContext> GetRegisteredState(TState key)
         {
-            if (!_states.TryGetValue(key, out var state))
+            if (!states.TryGetValue(key, out var state))
             {
                 throw new KeyNotFoundException($"State '{key}' is not registered.");
             }
@@ -195,8 +195,8 @@ namespace PschLib.StateMachines
 
 #if UNITY_EDITOR
         string IStateMachineDebugInfo.StateTypeName => typeof(TState).FullName ?? typeof(TState).Name;
-        string IStateMachineDebugInfo.CurrentStateName => _isStarted ? _currentStateKey.ToString() : "Not Started";
-        bool IStateMachineDebugInfo.IsStarted => _isStarted;
+        string IStateMachineDebugInfo.CurrentStateName => isStarted ? currentStateKey.ToString() : "Not Started";
+        bool IStateMachineDebugInfo.IsStarted => isStarted;
 
         void IStateMachineDebugInfo.GetRegisteredStateNames(List<string> results)
         {
@@ -207,7 +207,7 @@ namespace PschLib.StateMachines
 
             results.Clear();
 
-            foreach (var key in _states.Keys)
+            foreach (var key in states.Keys)
             {
                 results.Add(key.ToString());
             }

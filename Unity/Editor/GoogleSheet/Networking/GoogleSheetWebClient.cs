@@ -7,7 +7,7 @@ namespace PschLib.GoogleSheets
 {
     internal sealed class GoogleSheetWebClient
     {
-        private readonly string _webAppUrl;
+        private readonly string webAppUrl;
 
         public GoogleSheetWebClient(string webAppUrl)
         {
@@ -16,7 +16,7 @@ namespace PschLib.GoogleSheets
                 throw new ArgumentException("The web app URL is empty.", nameof(webAppUrl));
             }
 
-            _webAppUrl = webAppUrl.Trim();
+            this.webAppUrl = webAppUrl.Trim();
         }
 
         public async Task<GoogleSheetListResponse> GetSheetListAsync()
@@ -38,7 +38,7 @@ namespace PschLib.GoogleSheets
             form.AddField("key", RequireValue(key, nameof(key)));
             form.AddField("spreadsheetId", RequireValue(spreadsheetId, nameof(spreadsheetId)));
 
-            var json = await PostFormJsonAsync(_webAppUrl, form);
+            var json = await PostFormJsonAsync(webAppUrl, form);
             return Deserialize<GoogleSheetProjectRegistrationResponse>(json);
         }
 
@@ -64,8 +64,8 @@ namespace PschLib.GoogleSheets
 
         private string BuildUrl(string query)
         {
-            var separator = _webAppUrl.Contains("?") ? "&" : "?";
-            return $"{_webAppUrl}{separator}{query}";
+            var separator = webAppUrl.Contains("?") ? "&" : "?";
+            return $"{webAppUrl}{separator}{query}";
         }
 
         private static string Escape(string value, string parameterName)

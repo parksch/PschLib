@@ -4,21 +4,21 @@ namespace PschLib.AssetLoading.Internal
 {
     internal readonly struct AssetKey : IEquatable<AssetKey>
     {
-        private readonly string _address;
-        private readonly Type _assetType;
+        private readonly string address;
+        private readonly Type assetType;
 
-        public string Address => _address;
-        public Type AssetType => _assetType;
+        public string Address => address;
+        public Type AssetType => assetType;
 
         public AssetKey(string address, Type assetType)
         {
-            _address = address;
-            _assetType = assetType;
+            this.address = address;
+            this.assetType = assetType;
         }
 
         public bool Equals(AssetKey other)
         {
-            return string.Equals(_address, other._address, StringComparison.Ordinal) && _assetType == other._assetType;
+            return string.Equals(address, other.address, StringComparison.Ordinal) && assetType == other.assetType;
         }
 
         public override bool Equals(object obj)
@@ -30,7 +30,7 @@ namespace PschLib.AssetLoading.Internal
         {
             unchecked
             {
-                return ((_address != null ? StringComparer.Ordinal.GetHashCode(_address) : 0) * 397) ^ (_assetType != null ? _assetType.GetHashCode() : 0);
+                return ((address != null ? StringComparer.Ordinal.GetHashCode(address) : 0) * 397) ^ (assetType != null ? assetType.GetHashCode() : 0);
             }
         }
     }

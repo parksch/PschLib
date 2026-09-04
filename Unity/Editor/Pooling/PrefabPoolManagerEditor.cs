@@ -8,21 +8,21 @@ namespace PschLib.Unity.Editor.Pooling
     [CustomEditor(typeof(PrefabPoolManager))]
     public sealed class PrefabPoolManagerEditor : UnityEditor.Editor
     {
-        private readonly List<PrefabPoolManager.DebugEntry> _entries = new List<PrefabPoolManager.DebugEntry>();
-        private readonly Dictionary<string, bool> _foldouts = new Dictionary<string, bool>();
-        private PrefabPoolManager _manager;
+        private readonly List<PrefabPoolManager.DebugEntry> entries = new List<PrefabPoolManager.DebugEntry>();
+        private readonly Dictionary<string, bool> foldouts = new Dictionary<string, bool>();
+        private PrefabPoolManager manager;
 
         private void OnEnable()
         {
-            _manager = (PrefabPoolManager)target;
-            _manager.DebugStateChanged += Repaint;
+            manager = (PrefabPoolManager)target;
+            manager.DebugStateChanged += Repaint;
         }
 
         private void OnDisable()
         {
-            if (_manager != null)
+            if (manager != null)
             {
-                _manager.DebugStateChanged -= Repaint;
+                manager.DebugStateChanged -= Repaint;
             }
         }
 
@@ -35,7 +35,7 @@ namespace PschLib.Unity.Editor.Pooling
                 return;
             }
 
-            _manager.GetDebugEntries(_entries);
+            manager.GetDebugEntries(entries);
             DrawRuntimeStatus();
             DrawRegisteredPools();
         }
@@ -45,16 +45,16 @@ namespace PschLib.Unity.Editor.Pooling
             int inUseCount = 0;
             int inactiveCount = 0;
 
-            for (int i = 0; i < _entries.Count; i++)
+            for (int i = 0; i < entries.Count; i++)
             {
-                inUseCount += _entries[i].InUseCount;
-                inactiveCount += _entries[i].InactiveCount;
+                inUseCount += entries[i].InUseCount;
+                inactiveCount += entries[i].InactiveCount;
             }
 
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Runtime Status", EditorStyles.boldLabel);
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            EditorGUILayout.LabelField("Registered Pools", _entries.Count.ToString());
+            EditorGUILayout.LabelField("Registered Pools", entries.Count.ToString());
             EditorGUILayout.LabelField("Managed Instances", (inUseCount + inactiveCount).ToString());
             EditorGUILayout.LabelField("In Use Instances", inUseCount.ToString());
             EditorGUILayout.LabelField("Inactive Instances", inactiveCount.ToString());
@@ -65,18 +65,18 @@ namespace PschLib.Unity.Editor.Pooling
         {
             EditorGUILayout.LabelField("Registered Pools", EditorStyles.boldLabel);
 
-            if (_entries.Count == 0)
+            if (entries.Count == 0)
             {
                 EditorGUILayout.HelpBox("No pools are registered.", MessageType.Info);
                 return;
             }
 
-            for (int i = 0; i < _entries.Count; i++)
+            for (int i = 0; i < entries.Count; i++)
             {
-                PrefabPoolManager.DebugEntry entry = _entries[i];
-                _foldouts.TryGetValue(entry.Key, out bool foldout);
+                PrefabPoolManager.DebugEntry entry = entries[i];
+                foldouts.TryGetValue(entry.Key, out bool foldout);
                 foldout = EditorGUILayout.Foldout(foldout, entry.Key, true);
-                _foldouts[entry.Key] = foldout;
+                foldouts[entry.Key] = foldout;
 
                 if (!foldout)
                 {

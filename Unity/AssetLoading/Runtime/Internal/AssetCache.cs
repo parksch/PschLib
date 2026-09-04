@@ -9,16 +9,16 @@ namespace PschLib.AssetLoading.Internal
 {
     internal sealed class AssetCache
     {
-        private readonly Dictionary<AssetKey, AssetCacheEntry> _entries = new Dictionary<AssetKey, AssetCacheEntry>();
+        private readonly Dictionary<AssetKey, AssetCacheEntry> entries = new Dictionary<AssetKey, AssetCacheEntry>();
 
-        public int Count => _entries.Count;
+        public int Count => entries.Count;
         public int ActiveCount
         {
             get
             {
                 var count = 0;
 
-                foreach (var entry in _entries.Values)
+                foreach (var entry in entries.Values)
                 {
                     if (entry.ReferenceCount > 0)
                     {
@@ -34,11 +34,11 @@ namespace PschLib.AssetLoading.Internal
         {
             var key = new AssetKey(address, typeof(TAsset));
 
-            if (_entries.TryGetValue(key, out var entry))
+            if (entries.TryGetValue(key, out var entry))
             {
                 if (entry.Asset == null)
                 {
-                    _entries.Remove(key);
+                    entries.Remove(key);
                     asset = null;
                     return false;
                 }
@@ -56,11 +56,11 @@ namespace PschLib.AssetLoading.Internal
         {
             var key = new AssetKey(address, typeof(TAsset));
 
-            if (_entries.TryGetValue(key, out var entry))
+            if (entries.TryGetValue(key, out var entry))
             {
                 if (entry.Asset == null)
                 {
-                    _entries.Remove(key);
+                    entries.Remove(key);
                     asset = null;
                     return false;
                 }
@@ -97,19 +97,19 @@ namespace PschLib.AssetLoading.Internal
 
             var key = new AssetKey(address, typeof(TAsset));
 
-            if (_entries.ContainsKey(key))
+            if (entries.ContainsKey(key))
             {
                 throw new InvalidOperationException($"Asset is already cached: {address} ({typeof(TAsset).Name})");
             }
 
-            _entries.Add(key, new AssetCacheEntry(asset, referenceCount));
+            entries.Add(key, new AssetCacheEntry(asset, referenceCount));
         }
 
         public AssetReleaseResult Release<TAsset>(string address) where TAsset : Object
         {
             var key = new AssetKey(address, typeof(TAsset));
 
-            if (!_entries.TryGetValue(key, out var entry))
+            if (!entries.TryGetValue(key, out var entry))
             {
                 return AssetReleaseResult.NotFound;
             }
@@ -133,7 +133,7 @@ namespace PschLib.AssetLoading.Internal
         {
             var key = new AssetKey(address, typeof(TAsset));
 
-            if (!_entries.TryGetValue(key, out var entry))
+            if (!entries.TryGetValue(key, out var entry))
             {
                 asset = null;
                 return AssetUnloadResult.NotFound;
@@ -145,7 +145,7 @@ namespace PschLib.AssetLoading.Internal
                 return AssetUnloadResult.InUse;
             }
 
-            _entries.Remove(key);
+            entries.Remove(key);
             asset = entry.Asset;
             return AssetUnloadResult.Unloaded;
         }
@@ -164,7 +164,7 @@ namespace PschLib.AssetLoading.Internal
 
             var unusedKeys = new List<AssetKey>();
 
-            foreach (var pair in _entries)
+            foreach (var pair in entries)
             {
                 if (pair.Value.ReferenceCount == 0 && canUnload(pair.Key))
                 {
@@ -175,8 +175,8 @@ namespace PschLib.AssetLoading.Internal
             for (var i = 0; i < unusedKeys.Count; i++)
             {
                 var key = unusedKeys[i];
-                var asset = _entries[key].Asset;
-                _entries.Remove(key);
+                var asset = entries[key].Asset;
+                entries.Remove(key);
                 unload(asset);
             }
 
@@ -190,12 +190,12 @@ namespace PschLib.AssetLoading.Internal
                 throw new ArgumentNullException(nameof(unload));
             }
 
-            foreach (var entry in _entries.Values)
+            foreach (var entry in entries.Values)
             {
                 unload(entry.Asset);
             }
 
-            _entries.Clear();
+            entries.Clear();
         }
 
 #if UNITY_EDITOR
@@ -203,7 +203,7 @@ namespace PschLib.AssetLoading.Internal
         {
             entries.Clear();
 
-            foreach (var pair in _entries)
+            foreach (var pair in this.entries)
             {
                 entries.Add(new AssetLoaderDebugEntry(
                     pair.Key.Address,

@@ -18,28 +18,28 @@ namespace PschLib.AssetLoading.Addressables
         : IAssetLoaderDebugInfo
 #endif
     {
-        private readonly AddressableAssetCache _cache = new AddressableAssetCache();
-        private readonly Dictionary<AddressableAssetKey, PendingLoad> _pendingLoads =
+        private readonly AddressableAssetCache cache = new AddressableAssetCache();
+        private readonly Dictionary<AddressableAssetKey, PendingLoad> pendingLoads =
             new Dictionary<AddressableAssetKey, PendingLoad>();
-        private int _generation;
+        private int generation;
 
 #if UNITY_EDITOR
         public event Action DebugStateChanged;
         public string LoaderName => nameof(AddressablesLoader);
-        public int CachedAssetCount => _cache.Count;
-        public int ActiveAssetCount => _cache.ActiveCount;
-        public int PendingLoadCount => _pendingLoads.Count;
+        public int CachedAssetCount => cache.Count;
+        public int ActiveAssetCount => cache.ActiveCount;
+        public int PendingLoadCount => pendingLoads.Count;
 
         public void GetCachedAssetEntries(List<AssetLoaderDebugEntry> entries)
         {
-            _cache.GetDebugEntries(entries);
+            cache.GetDebugEntries(entries);
         }
 
         public void GetPendingLoadEntries(List<AssetLoaderDebugEntry> entries)
         {
             entries.Clear();
 
-            foreach (var pair in _pendingLoads)
+            foreach (var pair in pendingLoads)
             {
                 entries.Add(new AssetLoaderDebugEntry(pair.Key.Address,
                     pair.Key.AssetType.Name, 0));
@@ -53,7 +53,7 @@ namespace PschLib.AssetLoading.Addressables
             ValidateAddress(address);
             await UniTask.SwitchToMainThread(cancellationToken);
 
-            if (_cache.TryAcquire<TAsset>(address, out var cachedAsset))
+            if (cache.TryAcquire<TAsset>(address, out var cachedAsset))
             {
                 NotifyDebugStateChanged();
                 return cachedAsset;
@@ -61,12 +61,12 @@ namespace PschLib.AssetLoading.Addressables
 
             var key = new AddressableAssetKey(address, typeof(TAsset));
 
-            if (!_pendingLoads.TryGetValue(key, out var pendingLoad))
+            if (!pendingLoads.TryGetValue(key, out var pendingLoad))
             {
                 pendingLoad = new PendingLoad();
-                _pendingLoads.Add(key, pendingLoad);
+                pendingLoads.Add(key, pendingLoad);
                 NotifyDebugStateChanged();
-                LoadPendingAsync<TAsset>(address, key, pendingLoad, _generation).Forget();
+                LoadPendingAsync<TAsset>(address, key, pendingLoad, generation).Forget();
             }
 
             var loadedAsset = cancellationToken.CanBeCanceled
@@ -78,7 +78,7 @@ namespace PschLib.AssetLoading.Addressables
                 return null;
             }
 
-            if (!_cache.TryAcquire<TAsset>(address, out var asset))
+            if (!cache.TryAcquire<TAsset>(address, out var asset))
             {
                 return null;
             }
@@ -105,7 +105,7 @@ namespace PschLib.AssetLoading.Addressables
                     return;
                 }
 
-                if (generation != _generation)
+                if (generation != this.generation)
                 {
                     ReleaseHandle(handle);
                     RemovePending(key, pendingLoad);
@@ -113,9 +113,9 @@ namespace PschLib.AssetLoading.Addressables
                     return;
                 }
 
-                if (!_cache.TryGet<TAsset>(address, out var cachedAsset))
+                if (!cache.TryGet<TAsset>(address, out var cachedAsset))
                 {
-                    _cache.AddUnused(address, asset, handle);
+                    cache.AddUnused(address, asset, handle);
                     cachedAsset = asset;
                 }
                 else
@@ -144,7 +144,7 @@ namespace PschLib.AssetLoading.Addressables
             ValidateMainThread();
             ValidateAddress(address);
 
-            switch (_cache.Release<TAsset>(address))
+            switch (cache.Release<TAsset>(address))
             {
                 case AddressableReleaseResult.NotFound:
                     Debug.LogWarning($"Addressable asset was not found in cache: {address} ({typeof(TAsset).Name})");
@@ -167,13 +167,13 @@ namespace PschLib.AssetLoading.Addressables
             ValidateAddress(address);
             var key = new AddressableAssetKey(address, typeof(TAsset));
 
-            if (_pendingLoads.ContainsKey(key))
+            if (pendingLoads.ContainsKey(key))
             {
                 Debug.LogWarning($"Addressable asset unload was ignored because it is still loading: {address} ({typeof(TAsset).Name})");
                 return;
             }
 
-            var result = _cache.Unload<TAsset>(address, out var handle);
+            var result = cache.Unload<TAsset>(address, out var handle);
 
             switch (result)
             {
@@ -199,7 +199,7 @@ namespace PschLib.AssetLoading.Addressables
         public void ClearUnused()
         {
             ValidateMainThread();
-            var unloadedCount = _cache.ClearUnused();
+            var unloadedCount = cache.ClearUnused();
 
             if (unloadedCount > 0)
             {
@@ -211,25 +211,25 @@ namespace PschLib.AssetLoading.Addressables
         {
             ValidateMainThread();
 
-            if (_pendingLoads.Count > 0 || _cache.ActiveCount > 0)
+            if (pendingLoads.Count > 0 || cache.ActiveCount > 0)
             {
-                Debug.LogWarning($"AddressablesLoader was cleared with {_pendingLoads.Count} pending load(s) and {_cache.ActiveCount} active cached asset(s).");
+                Debug.LogWarning($"AddressablesLoader was cleared with {pendingLoads.Count} pending load(s) and {cache.ActiveCount} active cached asset(s).");
             }
 
-            _generation++;
-            _pendingLoads.Clear();
-            _cache.Clear();
+            generation++;
+            pendingLoads.Clear();
+            cache.Clear();
             NotifyDebugStateChanged();
         }
 
         private void RemovePending(AddressableAssetKey key, PendingLoad pendingLoad)
         {
-            if (!_pendingLoads.TryGetValue(key, out var current) || !ReferenceEquals(current, pendingLoad))
+            if (!pendingLoads.TryGetValue(key, out var current) || !ReferenceEquals(current, pendingLoad))
             {
                 return;
             }
 
-            _pendingLoads.Remove(key);
+            pendingLoads.Remove(key);
             NotifyDebugStateChanged();
         }
 
@@ -267,14 +267,14 @@ namespace PschLib.AssetLoading.Addressables
 
         private sealed class PendingLoad
         {
-            private readonly UniTaskCompletionSource<Object> _completionSource =
+            private readonly UniTaskCompletionSource<Object> completionSource =
                 new UniTaskCompletionSource<Object>();
 
-            public UniTask<Object> Task => _completionSource.Task;
+            public UniTask<Object> Task => completionSource.Task;
 
             public bool TrySetResult(Object asset)
             {
-                return _completionSource.TrySetResult(asset);
+                return completionSource.TrySetResult(asset);
             }
         }
     }

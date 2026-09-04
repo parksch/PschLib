@@ -17,27 +17,27 @@ namespace PschLib.AssetLoading.Resources
         : IAssetLoaderDebugInfo
 #endif
     {
-        private readonly AssetCache _cache = new AssetCache();
-        private readonly Dictionary<AssetKey, PendingLoad> _pendingLoads = new Dictionary<AssetKey, PendingLoad>();
-        private int _generation;
+        private readonly AssetCache cache = new AssetCache();
+        private readonly Dictionary<AssetKey, PendingLoad> pendingLoads = new Dictionary<AssetKey, PendingLoad>();
+        private int generation;
 
 #if UNITY_EDITOR
         public event Action DebugStateChanged;
         public string LoaderName => nameof(ResourcesLoader);
-        public int CachedAssetCount => _cache.Count;
-        public int ActiveAssetCount => _cache.ActiveCount;
-        public int PendingLoadCount => _pendingLoads.Count;
+        public int CachedAssetCount => cache.Count;
+        public int ActiveAssetCount => cache.ActiveCount;
+        public int PendingLoadCount => pendingLoads.Count;
 
         public void GetCachedAssetEntries(List<AssetLoaderDebugEntry> entries)
         {
-            _cache.GetDebugEntries(entries);
+            cache.GetDebugEntries(entries);
         }
 
         public void GetPendingLoadEntries(List<AssetLoaderDebugEntry> entries)
         {
             entries.Clear();
 
-            foreach (var pair in _pendingLoads)
+            foreach (var pair in pendingLoads)
             {
                 entries.Add(new AssetLoaderDebugEntry(pair.Key.Address, pair.Key.AssetType.Name, 0));
             }
@@ -49,7 +49,7 @@ namespace PschLib.AssetLoading.Resources
             ValidateMainThread();
             ValidatePath(path);
 
-            if (_cache.TryAcquire<TAsset>(path, out var cachedAsset))
+            if (cache.TryAcquire<TAsset>(path, out var cachedAsset))
             {
                 NotifyDebugStateChanged();
                 return cachedAsset;
@@ -63,7 +63,7 @@ namespace PschLib.AssetLoading.Resources
                 return null;
             }
 
-            _cache.Add(path, asset);
+            cache.Add(path, asset);
             NotifyDebugStateChanged();
             return asset;
         }
@@ -73,7 +73,7 @@ namespace PschLib.AssetLoading.Resources
             ValidatePath(path);
             await UniTask.SwitchToMainThread(cancellationToken);
 
-            if (_cache.TryAcquire<TAsset>(path, out var cachedAsset))
+            if (cache.TryAcquire<TAsset>(path, out var cachedAsset))
             {
                 NotifyDebugStateChanged();
                 return cachedAsset;
@@ -81,12 +81,12 @@ namespace PschLib.AssetLoading.Resources
 
             var key = new AssetKey(path, typeof(TAsset));
 
-            if (!_pendingLoads.TryGetValue(key, out var pendingLoad))
+            if (!pendingLoads.TryGetValue(key, out var pendingLoad))
             {
                 pendingLoad = new PendingLoad();
-                _pendingLoads.Add(key, pendingLoad);
+                pendingLoads.Add(key, pendingLoad);
                 NotifyDebugStateChanged();
-                LoadPendingAsync<TAsset>(path, key, pendingLoad, _generation).Forget();
+                LoadPendingAsync<TAsset>(path, key, pendingLoad, generation).Forget();
             }
 
             var loadedAsset = cancellationToken.CanBeCanceled
@@ -98,7 +98,7 @@ namespace PschLib.AssetLoading.Resources
                 return null;
             }
 
-            if (!_cache.TryAcquire<TAsset>(path, out var asset))
+            if (!cache.TryAcquire<TAsset>(path, out var asset))
             {
                 return null;
             }
@@ -112,7 +112,7 @@ namespace PschLib.AssetLoading.Resources
             ValidateMainThread();
             ValidatePath(path);
 
-            var result = _cache.Release<TAsset>(path);
+            var result = cache.Release<TAsset>(path);
 
             switch (result)
             {
@@ -141,13 +141,13 @@ namespace PschLib.AssetLoading.Resources
 
             var key = new AssetKey(path, typeof(TAsset));
 
-            if (_pendingLoads.ContainsKey(key))
+            if (pendingLoads.ContainsKey(key))
             {
                 Debug.LogWarning($"Resource asset unload was ignored because it is still loading: {path} ({typeof(TAsset).Name})");
                 return;
             }
 
-            var result = _cache.Unload<TAsset>(path, out var asset);
+            var result = cache.Unload<TAsset>(path, out var asset);
 
             switch (result)
             {
@@ -169,7 +169,7 @@ namespace PschLib.AssetLoading.Resources
         public void ClearUnused()
         {
             ValidateMainThread();
-            var unloadedCount = _cache.ClearUnused(key => !_pendingLoads.ContainsKey(key), UnloadAsset);
+            var unloadedCount = cache.ClearUnused(key => !pendingLoads.ContainsKey(key), UnloadAsset);
 
             if (unloadedCount > 0)
             {
@@ -180,17 +180,17 @@ namespace PschLib.AssetLoading.Resources
         public void Clear()
         {
             ValidateMainThread();
-            var pendingCount = _pendingLoads.Count;
-            var activeCount = _cache.ActiveCount;
+            var pendingCount = pendingLoads.Count;
+            var activeCount = cache.ActiveCount;
 
             if (pendingCount > 0 || activeCount > 0)
             {
                 Debug.LogWarning($"ResourcesLoader was cleared with {pendingCount} pending load(s) and {activeCount} active cached asset(s).");
             }
 
-            _generation++;
-            _pendingLoads.Clear();
-            _cache.Clear(UnloadAsset);
+            generation++;
+            pendingLoads.Clear();
+            cache.Clear(UnloadAsset);
             NotifyDebugStateChanged();
         }
 
@@ -210,16 +210,16 @@ namespace PschLib.AssetLoading.Resources
                     return;
                 }
 
-                if (generation != _generation)
+                if (generation != this.generation)
                 {
                     RemovePending(key, pendingLoad);
                     pendingLoad.TrySetResult(null);
                     return;
                 }
 
-                if (!_cache.TryGet<TAsset>(path, out var cachedAsset))
+                if (!cache.TryGet<TAsset>(path, out var cachedAsset))
                 {
-                    _cache.AddUnused(path, asset);
+                    cache.AddUnused(path, asset);
                     cachedAsset = asset;
                 }
 
@@ -239,12 +239,12 @@ namespace PschLib.AssetLoading.Resources
 
         private void RemovePending(AssetKey key, PendingLoad pendingLoad)
         {
-            if (!_pendingLoads.TryGetValue(key, out var current) || !ReferenceEquals(current, pendingLoad))
+            if (!pendingLoads.TryGetValue(key, out var current) || !ReferenceEquals(current, pendingLoad))
             {
                 return;
             }
 
-            _pendingLoads.Remove(key);
+            pendingLoads.Remove(key);
             NotifyDebugStateChanged();
         }
 
@@ -284,18 +284,18 @@ namespace PschLib.AssetLoading.Resources
 
         private sealed class PendingLoad
         {
-            private readonly UniTaskCompletionSource<Object> _completionSource = new UniTaskCompletionSource<Object>();
+            private readonly UniTaskCompletionSource<Object> completionSource = new UniTaskCompletionSource<Object>();
 
-            public UniTask<Object> Task => _completionSource.Task;
+            public UniTask<Object> Task => completionSource.Task;
 
             public bool TrySetResult(Object asset)
             {
-                return _completionSource.TrySetResult(asset);
+                return completionSource.TrySetResult(asset);
             }
 
             public bool TrySetException(Exception exception)
             {
-                return _completionSource.TrySetException(exception);
+                return completionSource.TrySetException(exception);
             }
         }
     }

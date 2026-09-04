@@ -10,7 +10,7 @@ namespace PschLib.Unity.Debugging
     public sealed class StateMachineDebugViewerEditor
         : DebugViewerEditorBase<StateMachineDebugViewer, IStateMachineDebugInfo>
     {
-        private readonly List<string> _stateNames = new List<string>();
+        private readonly List<string> stateNames = new List<string>();
 
         protected override string EmptyMessage => "No StateMachine was found on this GameObject.";
 
@@ -32,13 +32,13 @@ namespace PschLib.Unity.Debugging
             EditorGUILayout.LabelField("Started", debugInfo.IsStarted.ToString());
             EditorGUILayout.LabelField("Current State", debugInfo.CurrentStateName);
 
-            debugInfo.GetRegisteredStateNames(_stateNames);
-            EditorGUILayout.LabelField("Registered States", _stateNames.Count.ToString());
+            debugInfo.GetRegisteredStateNames(stateNames);
+            EditorGUILayout.LabelField("Registered States", stateNames.Count.ToString());
             EditorGUI.indentLevel++;
 
-            for (var i = 0; i < _stateNames.Count; i++)
+            for (var i = 0; i < stateNames.Count; i++)
             {
-                EditorGUILayout.LabelField(_stateNames[i]);
+                EditorGUILayout.LabelField(stateNames[i]);
             }
 
             EditorGUI.indentLevel--;

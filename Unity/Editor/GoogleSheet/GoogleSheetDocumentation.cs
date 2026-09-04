@@ -7,7 +7,7 @@ namespace PschLib.GoogleSheets
 {
     internal static class GoogleSheetDocumentation
     {
-        private const string GuideFileName = "GoogleSheetGuide.html";
+        private const string guideFileName = "GoogleSheetGuide.html";
 
         public static void Open(string anchor = null)
         {
@@ -86,7 +86,7 @@ namespace PschLib.GoogleSheets
         {
             if (!string.IsNullOrWhiteSpace(rootPath))
             {
-                var documentationPath = Path.Combine(rootPath, "Documentation", GuideFileName);
+                var documentationPath = Path.Combine(rootPath, "Documentation", guideFileName);
 
                 if (File.Exists(documentationPath))
                 {
@@ -94,7 +94,7 @@ namespace PschLib.GoogleSheets
                     return true;
                 }
 
-                var hiddenDocumentationPath = Path.Combine(rootPath, "Documentation~", GuideFileName);
+                var hiddenDocumentationPath = Path.Combine(rootPath, "Documentation~", guideFileName);
 
                 if (File.Exists(hiddenDocumentationPath))
                 {

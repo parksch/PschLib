@@ -11,8 +11,8 @@ namespace PschLib.AssetLoading.Editor
     public sealed class AssetLoaderDebugViewerEditor
         : DebugViewerEditorBase<AssetLoaderDebugViewer, IAssetLoaderDebugInfo>
     {
-        private readonly List<AssetLoaderDebugEntry> _cachedEntries = new List<AssetLoaderDebugEntry>();
-        private readonly List<AssetLoaderDebugEntry> _pendingEntries = new List<AssetLoaderDebugEntry>();
+        private readonly List<AssetLoaderDebugEntry> cachedEntries = new List<AssetLoaderDebugEntry>();
+        private readonly List<AssetLoaderDebugEntry> pendingEntries = new List<AssetLoaderDebugEntry>();
 
         protected override string EmptyMessage => "No asset loader was found on this GameObject.";
 
@@ -28,8 +28,8 @@ namespace PschLib.AssetLoading.Editor
 
         protected override void DrawDebugInfo(MonoBehaviour component, string fieldName, IAssetLoaderDebugInfo debugInfo)
         {
-            debugInfo.GetCachedAssetEntries(_cachedEntries);
-            debugInfo.GetPendingLoadEntries(_pendingEntries);
+            debugInfo.GetCachedAssetEntries(cachedEntries);
+            debugInfo.GetPendingLoadEntries(pendingEntries);
 
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             EditorGUILayout.LabelField($"{component.GetType().Name}.{fieldName}", EditorStyles.boldLabel);
@@ -49,15 +49,15 @@ namespace PschLib.AssetLoading.Editor
             EditorGUILayout.LabelField("Cached Assets", EditorStyles.boldLabel);
             EditorGUI.indentLevel++;
 
-            if (_cachedEntries.Count == 0)
+            if (cachedEntries.Count == 0)
             {
                 EditorGUILayout.LabelField("None");
             }
             else
             {
-                for (var i = 0; i < _cachedEntries.Count; i++)
+                for (var i = 0; i < cachedEntries.Count; i++)
                 {
-                    var entry = _cachedEntries[i];
+                    var entry = cachedEntries[i];
                     var state = entry.ReferenceCount > 0 ? "Active" : "Unused";
                     EditorGUILayout.LabelField(entry.Address, EditorStyles.boldLabel);
                     EditorGUI.indentLevel++;
@@ -76,15 +76,15 @@ namespace PschLib.AssetLoading.Editor
             EditorGUILayout.LabelField("Pending Loads", EditorStyles.boldLabel);
             EditorGUI.indentLevel++;
 
-            if (_pendingEntries.Count == 0)
+            if (pendingEntries.Count == 0)
             {
                 EditorGUILayout.LabelField("None");
             }
             else
             {
-                for (var i = 0; i < _pendingEntries.Count; i++)
+                for (var i = 0; i < pendingEntries.Count; i++)
                 {
-                    var entry = _pendingEntries[i];
+                    var entry = pendingEntries[i];
                     EditorGUILayout.LabelField(entry.Address, EditorStyles.boldLabel);
                     EditorGUI.indentLevel++;
                     EditorGUILayout.LabelField("Type", entry.AssetTypeName);

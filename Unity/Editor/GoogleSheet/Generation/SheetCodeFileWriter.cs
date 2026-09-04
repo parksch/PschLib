@@ -6,7 +6,7 @@ namespace PschLib.GoogleSheets
 {
     internal static class SheetCodeFileWriter
     {
-        private static readonly Encoding Utf8WithoutBom = new UTF8Encoding(false);
+        private static readonly Encoding utf8WithoutBom = new UTF8Encoding(false);
 
         public static string Write(GoogleSheetProject project, GoogleSheetImportResult result)
         {
@@ -42,18 +42,18 @@ namespace PschLib.GoogleSheets
                 throw new InvalidOperationException($"The generated data does not contain an id field: {className}");
             }
 
-            File.WriteAllText(Path.Combine(sheetDirectory, dataFileName), result.GeneratedCode, Utf8WithoutBom);
+            File.WriteAllText(Path.Combine(sheetDirectory, dataFileName), result.GeneratedCode, utf8WithoutBom);
 
             if (project.GenerateScriptableObject)
             {
-                File.WriteAllText(Path.Combine(sheetDirectory, tableFileName), CreateTableCode(targetNamespace, className, keyField.Name), Utf8WithoutBom);
+                File.WriteAllText(Path.Combine(sheetDirectory, tableFileName), CreateTableCode(targetNamespace, className, keyField.Name), utf8WithoutBom);
             }
 
             var functionsPath = Path.Combine(sheetDirectory, functionsFileName);
 
             if (!File.Exists(functionsPath))
             {
-                File.WriteAllText(functionsPath, CreateFunctionsCode(targetNamespace, className), Utf8WithoutBom);
+                File.WriteAllText(functionsPath, CreateFunctionsCode(targetNamespace, className), utf8WithoutBom);
             }
 
             return $"{sheetAssetPath}/{dataFileName}";
@@ -102,7 +102,7 @@ namespace PschLib.GoogleSheets
             }
 
             builder.AppendLine("}");
-            File.WriteAllText(filePath, builder.ToString(), Utf8WithoutBom);
+            File.WriteAllText(filePath, builder.ToString(), utf8WithoutBom);
         }
 
         private static void DeleteLegacyGeneratedFile(string filePath)

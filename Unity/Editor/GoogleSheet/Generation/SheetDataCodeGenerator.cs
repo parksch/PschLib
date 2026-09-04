@@ -6,7 +6,7 @@ namespace PschLib.GoogleSheets
 {
     public static class SheetDataCodeGenerator
     {
-        private static readonly HashSet<string> CSharpKeywords = new HashSet<string>(StringComparer.Ordinal)
+        private static readonly HashSet<string> cSharpKeywords = new HashSet<string>(StringComparer.Ordinal)
         {
             "abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char", "checked", "class", "const",
             "continue", "decimal", "default", "delegate", "do", "double", "else", "enum", "event", "explicit", "extern",
@@ -364,7 +364,7 @@ namespace PschLib.GoogleSheets
                 }
             }
 
-            return !CSharpKeywords.Contains(value);
+            return !cSharpKeywords.Contains(value);
         }
     }
 }

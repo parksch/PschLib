@@ -10,9 +10,9 @@ namespace PschLib.Unity.Debugging
         where TViewer : MonoBehaviour
         where TDebugInfo : class
     {
-        private readonly List<DebugTarget> _targets = new List<DebugTarget>();
-        private readonly List<TDebugInfo> _foundDebugInfos = new List<TDebugInfo>();
-        private readonly List<TDebugInfo> _subscribedDebugInfos = new List<TDebugInfo>();
+        private readonly List<DebugTarget> targets = new List<DebugTarget>();
+        private readonly List<TDebugInfo> foundDebugInfos = new List<TDebugInfo>();
+        private readonly List<TDebugInfo> subscribedDebugInfos = new List<TDebugInfo>();
 
         protected abstract string EmptyMessage { get; }
 
@@ -31,13 +31,13 @@ namespace PschLib.Unity.Debugging
             RefreshTargets();
             RefreshSubscriptions();
 
-            for (var i = 0; i < _targets.Count; i++)
+            for (var i = 0; i < targets.Count; i++)
             {
-                var debugTarget = _targets[i];
+                var debugTarget = targets[i];
                 DrawDebugInfo(debugTarget.Component, debugTarget.FieldName, debugTarget.DebugInfo);
             }
 
-            if (_targets.Count == 0)
+            if (targets.Count == 0)
             {
                 EditorGUILayout.HelpBox(EmptyMessage, MessageType.Info);
             }
@@ -45,7 +45,7 @@ namespace PschLib.Unity.Debugging
 
         public sealed override bool RequiresConstantRepaint()
         {
-            return EditorApplication.isPlaying && _subscribedDebugInfos.Count == 0;
+            return EditorApplication.isPlaying && subscribedDebugInfos.Count == 0;
         }
 
         protected abstract void DrawDebugInfo(MonoBehaviour component, string fieldName, TDebugInfo debugInfo);
@@ -54,8 +54,8 @@ namespace PschLib.Unity.Debugging
 
         private void RefreshTargets()
         {
-            _targets.Clear();
-            _foundDebugInfos.Clear();
+            targets.Clear();
+            foundDebugInfos.Clear();
 
             if (!(target is TViewer viewer))
             {
@@ -91,11 +91,11 @@ namespace PschLib.Unity.Debugging
                         continue;
                     }
 
-                    _targets.Add(new DebugTarget(component, fields[i].Name, debugInfo));
+                    targets.Add(new DebugTarget(component, fields[i].Name, debugInfo));
 
-                    if (!_foundDebugInfos.Contains(debugInfo))
+                    if (!foundDebugInfos.Contains(debugInfo))
                     {
-                        _foundDebugInfos.Add(debugInfo);
+                        foundDebugInfos.Add(debugInfo);
                     }
                 }
 
@@ -105,46 +105,46 @@ namespace PschLib.Unity.Debugging
 
         private void RefreshSubscriptions()
         {
-            if (_targets.Count == 0)
+            if (targets.Count == 0)
             {
                 RefreshTargets();
             }
 
-            for (var i = _subscribedDebugInfos.Count - 1; i >= 0; i--)
+            for (var i = subscribedDebugInfos.Count - 1; i >= 0; i--)
             {
-                var debugInfo = _subscribedDebugInfos[i];
+                var debugInfo = subscribedDebugInfos[i];
 
-                if (_foundDebugInfos.Contains(debugInfo))
+                if (foundDebugInfos.Contains(debugInfo))
                 {
                     continue;
                 }
 
                 Unsubscribe(debugInfo, Repaint);
-                _subscribedDebugInfos.RemoveAt(i);
+                subscribedDebugInfos.RemoveAt(i);
             }
 
-            for (var i = 0; i < _foundDebugInfos.Count; i++)
+            for (var i = 0; i < foundDebugInfos.Count; i++)
             {
-                var debugInfo = _foundDebugInfos[i];
+                var debugInfo = foundDebugInfos[i];
 
-                if (_subscribedDebugInfos.Contains(debugInfo))
+                if (subscribedDebugInfos.Contains(debugInfo))
                 {
                     continue;
                 }
 
                 Subscribe(debugInfo, Repaint);
-                _subscribedDebugInfos.Add(debugInfo);
+                subscribedDebugInfos.Add(debugInfo);
             }
         }
 
         private void UnsubscribeAll()
         {
-            for (var i = 0; i < _subscribedDebugInfos.Count; i++)
+            for (var i = 0; i < subscribedDebugInfos.Count; i++)
             {
-                Unsubscribe(_subscribedDebugInfos[i], Repaint);
+                Unsubscribe(subscribedDebugInfos[i], Repaint);
             }
 
-            _subscribedDebugInfos.Clear();
+            subscribedDebugInfos.Clear();
         }
 
         private readonly struct DebugTarget

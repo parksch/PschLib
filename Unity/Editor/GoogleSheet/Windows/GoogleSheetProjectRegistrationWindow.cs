@@ -7,13 +7,13 @@ namespace PschLib.GoogleSheets
 {
     internal sealed class GoogleSheetProjectRegistrationWindow : EditorWindow
     {
-        private GoogleSheetServer _server;
-        private List<GoogleSheetProjectItem> _projects;
-        private Action<GoogleSheetProjectItem> _onRegistered;
-        private string _projectName;
-        private string _spreadsheetAddress;
-        private string _error;
-        private bool _isRegistering;
+        private GoogleSheetServer server;
+        private List<GoogleSheetProjectItem> projects;
+        private Action<GoogleSheetProjectItem> onRegistered;
+        private string projectName;
+        private string spreadsheetAddress;
+        private string error;
+        private bool isRegistering;
 
         public static void Open(GoogleSheetServer server, IReadOnlyList<GoogleSheetProjectItem> projects, Action<GoogleSheetProjectItem> onRegistered)
         {
@@ -21,9 +21,9 @@ namespace PschLib.GoogleSheets
             window.titleContent = new GUIContent("Register Project");
             window.minSize = new Vector2(420f, 155f);
             window.maxSize = new Vector2(600f, 340f);
-            window._server = server;
-            window._projects = projects == null ? new List<GoogleSheetProjectItem>() : new List<GoogleSheetProjectItem>(projects);
-            window._onRegistered = onRegistered;
+            window.server = server;
+            window.projects = projects == null ? new List<GoogleSheetProjectItem>() : new List<GoogleSheetProjectItem>(projects);
+            window.onRegistered = onRegistered;
             window.ShowUtility();
         }
 
@@ -44,18 +44,18 @@ namespace PschLib.GoogleSheets
 
             using (new EditorGUI.DisabledScope(true))
             {
-                EditorGUILayout.ObjectField("Server", _server, typeof(GoogleSheetServer), false);
+                EditorGUILayout.ObjectField("Server", server, typeof(GoogleSheetServer), false);
             }
 
-            using (new EditorGUI.DisabledScope(_isRegistering))
+            using (new EditorGUI.DisabledScope(isRegistering))
             {
-                _projectName = EditorGUILayout.TextField("Project Name", _projectName);
-                _spreadsheetAddress = EditorGUILayout.TextField("Sheet URL or ID", _spreadsheetAddress);
+                projectName = EditorGUILayout.TextField("Project Name", projectName);
+                spreadsheetAddress = EditorGUILayout.TextField("Sheet URL or ID", spreadsheetAddress);
 
                 EditorGUILayout.Space();
                 EditorGUILayout.BeginHorizontal();
 
-                if (GUILayout.Button(_isRegistering ? "Registering..." : "Register"))
+                if (GUILayout.Button(isRegistering ? "Registering..." : "Register"))
                 {
                     Register();
                 }
@@ -68,32 +68,32 @@ namespace PschLib.GoogleSheets
                 EditorGUILayout.EndHorizontal();
             }
 
-            if (!string.IsNullOrWhiteSpace(_error))
+            if (!string.IsNullOrWhiteSpace(error))
             {
                 EditorGUILayout.Space();
-                EditorGUILayout.HelpBox(_error, MessageType.Error);
+                EditorGUILayout.HelpBox(error, MessageType.Error);
             }
         }
 
         private async void Register()
         {
-            _isRegistering = true;
-            _error = null;
+            isRegistering = true;
+            error = null;
             Repaint();
 
             try
             {
-                var project = await GoogleSheetRegistryService.RegisterProjectAsync(_server, _projectName, _spreadsheetAddress, _projects);
-                _onRegistered?.Invoke(project);
+                var project = await GoogleSheetRegistryService.RegisterProjectAsync(server, projectName, spreadsheetAddress, projects);
+                onRegistered?.Invoke(project);
                 Close();
             }
             catch (Exception exception)
             {
-                _error = exception.Message;
+                error = exception.Message;
             }
             finally
             {
-                _isRegistering = false;
+                isRegistering = false;
                 Repaint();
             }
         }

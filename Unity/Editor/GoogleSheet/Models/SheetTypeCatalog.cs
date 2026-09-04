@@ -5,7 +5,7 @@ namespace PschLib.GoogleSheets
 {
     public static class SheetTypeCatalog
     {
-        private static readonly SheetScalarTypeDefinition[] Definitions =
+        private static readonly SheetScalarTypeDefinition[] definitions =
         {
             new SheetScalarTypeDefinition("string", typeof(string), "string"),
             new SheetScalarTypeDefinition("int", typeof(int), "int"),
@@ -15,8 +15,8 @@ namespace PschLib.GoogleSheets
             new SheetScalarTypeDefinition("bool", typeof(bool), "bool")
         };
 
-        private static readonly Dictionary<string, SheetScalarTypeDefinition> BySheetName = CreateSheetNameMap();
-        private static readonly Dictionary<Type, SheetScalarTypeDefinition> ByRuntimeType = CreateRuntimeTypeMap();
+        private static readonly Dictionary<string, SheetScalarTypeDefinition> bySheetName = CreateSheetNameMap();
+        private static readonly Dictionary<Type, SheetScalarTypeDefinition> byRuntimeType = CreateRuntimeTypeMap();
 
         public static bool TryParse(string rawType, out SheetTypeInfo typeInfo)
         {
@@ -69,7 +69,7 @@ namespace PschLib.GoogleSheets
                 return false;
             }
 
-            return BySheetName.TryGetValue(sheetName.Trim(), out definition);
+            return bySheetName.TryGetValue(sheetName.Trim(), out definition);
         }
 
         public static bool TryGetByRuntimeType(Type runtimeType, out SheetScalarTypeDefinition definition)
@@ -80,7 +80,7 @@ namespace PschLib.GoogleSheets
                 return false;
             }
 
-            return ByRuntimeType.TryGetValue(runtimeType, out definition);
+            return byRuntimeType.TryGetValue(runtimeType, out definition);
         }
 
         private static bool TryParseEnum(string typeName, SheetTypeKind kind, out SheetTypeInfo typeInfo)
@@ -159,7 +159,7 @@ namespace PschLib.GoogleSheets
         {
             var result = new Dictionary<string, SheetScalarTypeDefinition>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var definition in Definitions)
+            foreach (var definition in definitions)
             {
                 result.Add(definition.SheetName, definition);
             }
@@ -171,7 +171,7 @@ namespace PschLib.GoogleSheets
         {
             var result = new Dictionary<Type, SheetScalarTypeDefinition>();
 
-            foreach (var definition in Definitions)
+            foreach (var definition in definitions)
             {
                 result.Add(definition.RuntimeType, definition);
             }

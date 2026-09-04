@@ -7,15 +7,15 @@ namespace PschLib.Unity.Pooling
     [DisallowMultipleComponent]
     public sealed class PrefabPoolManager : MonoBehaviour
     {
-        [SerializeField] private bool _initializeOnAwake = true;
-        [SerializeField] private List<PrefabPoolSetting> _settings = new List<PrefabPoolSetting>();
+        [SerializeField] private bool initializeOnAwake = true;
+        [SerializeField] private List<PrefabPoolSetting> settings = new List<PrefabPoolSetting>();
 
-        private readonly Dictionary<string, PrefabPool> _pools = new Dictionary<string, PrefabPool>(StringComparer.Ordinal);
-        private readonly Dictionary<GameObject, PrefabPool> _inUseInstancePools = new Dictionary<GameObject, PrefabPool>();
-        private readonly List<GameObject> _destroyedInstances = new List<GameObject>();
-        private bool _isInitialized;
+        private readonly Dictionary<string, PrefabPool> pools = new Dictionary<string, PrefabPool>(StringComparer.Ordinal);
+        private readonly Dictionary<GameObject, PrefabPool> inUseInstancePools = new Dictionary<GameObject, PrefabPool>();
+        private readonly List<GameObject> destroyedInstances = new List<GameObject>();
+        private bool isInitialized;
 
-        public int Count => _pools.Count;
+        public int Count => pools.Count;
 
 #if UNITY_EDITOR
         public event Action DebugStateChanged;
@@ -49,7 +49,7 @@ namespace PschLib.Unity.Pooling
             entries.Clear();
             RemoveDestroyedInstanceReferences();
 
-            foreach (var pair in _pools)
+            foreach (var pair in pools)
             {
                 PrefabPool pool = pair.Value;
                 pool.RemoveDestroyedReferences();
@@ -60,7 +60,7 @@ namespace PschLib.Unity.Pooling
 
         private void Awake()
         {
-            if (_initializeOnAwake)
+            if (initializeOnAwake)
             {
                 Initialize();
             }
@@ -70,15 +70,15 @@ namespace PschLib.Unity.Pooling
         {
             RemoveDestroyedInstanceReferences();
 
-            if (_inUseInstancePools.Count > 0)
+            if (inUseInstancePools.Count > 0)
             {
-                Debug.LogWarning($"PrefabPoolManager was destroyed with {_inUseInstancePools.Count} object(s) still in use.", this);
+                Debug.LogWarning($"PrefabPoolManager was destroyed with {inUseInstancePools.Count} object(s) still in use.", this);
             }
         }
 
         public bool Initialize()
         {
-            if (_isInitialized)
+            if (isInitialized)
             {
                 Debug.LogWarning("PrefabPoolManager is already initialized.", this);
                 return false;
@@ -89,13 +89,13 @@ namespace PschLib.Unity.Pooling
                 return false;
             }
 
-            for (int i = 0; i < _settings.Count; i++)
+            for (int i = 0; i < settings.Count; i++)
             {
-                PrefabPoolSetting setting = _settings[i];
+                PrefabPoolSetting setting = settings[i];
                 Register(setting.Key, setting.Prefab, setting.InitialCapacity, setting.MaxInactiveCount);
             }
 
-            _isInitialized = true;
+            isInitialized = true;
             NotifyDebugStateChanged();
             return true;
         }
@@ -122,7 +122,7 @@ namespace PschLib.Unity.Pooling
                 throw new ArgumentOutOfRangeException(nameof(initialCapacity), $"Must be between 0 and {maxInactiveCount}.");
             }
 
-            if (_pools.ContainsKey(key))
+            if (pools.ContainsKey(key))
             {
                 Debug.LogWarning($"Pool is already registered: {key}", this);
                 return false;
@@ -134,7 +134,7 @@ namespace PschLib.Unity.Pooling
 
             var pool = new PrefabPool(prefab, storageObject.transform, maxInactiveCount);
             pool.Prewarm(initialCapacity);
-            _pools.Add(key, pool);
+            pools.Add(key, pool);
             NotifyDebugStateChanged();
             return true;
         }
@@ -147,7 +147,7 @@ namespace PschLib.Unity.Pooling
                 return null;
             }
 
-            if (!_pools.TryGetValue(key, out var pool))
+            if (!pools.TryGetValue(key, out var pool))
             {
                 Debug.LogWarning($"Pool is not registered: {key}", this);
                 return null;
@@ -155,12 +155,12 @@ namespace PschLib.Unity.Pooling
 
             GameObject instance = pool.GetForManager(parent);
 
-            if (_inUseInstancePools.ContainsKey(instance))
+            if (inUseInstancePools.ContainsKey(instance))
             {
                 throw new InvalidOperationException($"Pooled object is already tracked as in use: {instance.name}");
             }
 
-            _inUseInstancePools.Add(instance, pool);
+            inUseInstancePools.Add(instance, pool);
 
             if (activate)
             {
@@ -179,7 +179,7 @@ namespace PschLib.Unity.Pooling
                 return false;
             }
 
-            if (!_inUseInstancePools.TryGetValue(instance, out var pool))
+            if (!inUseInstancePools.TryGetValue(instance, out var pool))
             {
                 Debug.LogWarning("Object was not spawned by this pool manager.", instance);
                 return false;
@@ -191,7 +191,7 @@ namespace PschLib.Unity.Pooling
 
             if (removed)
             {
-                _inUseInstancePools.Remove(instance);
+                inUseInstancePools.Remove(instance);
             }
 
             if (removed)
@@ -210,7 +210,7 @@ namespace PschLib.Unity.Pooling
                 return false;
             }
 
-            if (!_pools.TryGetValue(key, out var pool))
+            if (!pools.TryGetValue(key, out var pool))
             {
                 Debug.LogWarning($"Pool is not registered: {key}", this);
                 return false;
@@ -230,7 +230,7 @@ namespace PschLib.Unity.Pooling
                 return false;
             }
 
-            if (!_pools.TryGetValue(key, out var pool))
+            if (!pools.TryGetValue(key, out var pool))
             {
                 Debug.LogWarning($"Pool is not registered: {key}", this);
                 return false;
@@ -247,7 +247,7 @@ namespace PschLib.Unity.Pooling
 
             pool.Clear();
             pool.DestroyStorageParent();
-            _pools.Remove(key);
+            pools.Remove(key);
             NotifyDebugStateChanged();
             return true;
         }
@@ -256,9 +256,9 @@ namespace PschLib.Unity.Pooling
         {
             var keys = new HashSet<string>(StringComparer.Ordinal);
 
-            for (int i = 0; i < _settings.Count; i++)
+            for (int i = 0; i < settings.Count; i++)
             {
-                PrefabPoolSetting setting = _settings[i];
+                PrefabPoolSetting setting = settings[i];
 
                 if (setting == null || string.IsNullOrWhiteSpace(setting.Key) || setting.Prefab == null ||
                     setting.MaxInactiveCount < 1 || setting.InitialCapacity < 0 || setting.InitialCapacity > setting.MaxInactiveCount)
@@ -267,7 +267,7 @@ namespace PschLib.Unity.Pooling
                     return false;
                 }
 
-                if (!keys.Add(setting.Key) || _pools.ContainsKey(setting.Key))
+                if (!keys.Add(setting.Key) || pools.ContainsKey(setting.Key))
                 {
                     Debug.LogError($"Pool key is duplicated: {setting.Key}", this);
                     return false;
@@ -279,27 +279,27 @@ namespace PschLib.Unity.Pooling
 
         private void RemoveDestroyedInstanceReferences()
         {
-            _destroyedInstances.Clear();
+            destroyedInstances.Clear();
 
-            foreach (var pair in _inUseInstancePools)
+            foreach (var pair in inUseInstancePools)
             {
                 if (pair.Key == null)
                 {
-                    _destroyedInstances.Add(pair.Key);
+                    destroyedInstances.Add(pair.Key);
                 }
             }
 
-            for (int i = 0; i < _destroyedInstances.Count; i++)
+            for (int i = 0; i < destroyedInstances.Count; i++)
             {
-                _inUseInstancePools.Remove(_destroyedInstances[i]);
+                inUseInstancePools.Remove(destroyedInstances[i]);
             }
 
-            if (_destroyedInstances.Count == 0)
+            if (destroyedInstances.Count == 0)
             {
                 return;
             }
 
-            foreach (PrefabPool pool in _pools.Values)
+            foreach (PrefabPool pool in pools.Values)
             {
                 pool.RemoveDestroyedInUseReferences();
             }

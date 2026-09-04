@@ -18,14 +18,14 @@ namespace PschLib.GoogleSheets
     [InitializeOnLoad]
     internal static class GoogleSheetPendingImportProcessor
     {
-        private const string SessionKey = "PschLib.GoogleSheet.PendingImports";
-        private const string StateKey = "PschLib.GoogleSheet.ImportState";
-        private const string StatusKey = "PschLib.GoogleSheet.ImportStatus";
-        private static bool _scheduled;
-        private static bool _processing;
+        private const string sessionKey = "PschLib.GoogleSheet.PendingImports";
+        private const string stateKey = "PschLib.GoogleSheet.ImportState";
+        private const string statusKey = "PschLib.GoogleSheet.ImportStatus";
+        private static bool scheduled;
+        private static bool processing;
 
-        public static GoogleSheetImportState State => (GoogleSheetImportState)SessionState.GetInt(StateKey, (int)GoogleSheetImportState.None);
-        public static string StatusMessage => SessionState.GetString(StatusKey, "Preparing Google Sheet import...");
+        public static GoogleSheetImportState State => (GoogleSheetImportState)SessionState.GetInt(stateKey, (int)GoogleSheetImportState.None);
+        public static string StatusMessage => SessionState.GetString(statusKey, "Preparing Google Sheet import...");
         public static bool IsFinished => State == GoogleSheetImportState.Completed || State == GoogleSheetImportState.Failed;
         public static bool IsImporting => State == GoogleSheetImportState.GeneratingCode || State == GoogleSheetImportState.WaitingForCompilation || State == GoogleSheetImportState.CreatingAssets;
 
@@ -89,7 +89,7 @@ namespace PschLib.GoogleSheets
                 }
             }
 
-            SessionState.SetString(SessionKey, JsonUtility.ToJson(pending));
+            SessionState.SetString(sessionKey, JsonUtility.ToJson(pending));
             SetState(GoogleSheetImportState.WaitingForCompilation, $"Generated code for {pending.SheetIds.Count} sheet(s). Waiting for Unity compilation...");
             GoogleSheetImportProgressWindow.Open();
             Schedule();
@@ -97,30 +97,30 @@ namespace PschLib.GoogleSheets
 
         public static void Schedule()
         {
-            if (_scheduled)
+            if (scheduled)
             {
                 return;
             }
 
-            _scheduled = true;
+            scheduled = true;
             EditorApplication.update += TryProcess;
         }
 
         private static void TryProcess()
         {
-            if (_processing || EditorApplication.isCompiling || EditorApplication.isUpdating)
+            if (processing || EditorApplication.isCompiling || EditorApplication.isUpdating)
             {
                 return;
             }
 
             EditorApplication.update -= TryProcess;
-            _scheduled = false;
+            scheduled = false;
             ProcessPending();
         }
 
         private static async void ProcessPending()
         {
-            _processing = true;
+            processing = true;
 
             try
             {
@@ -151,18 +151,18 @@ namespace PschLib.GoogleSheets
                     Debug.Log($"Google Sheet asset generated: {assetPath}");
                 }
 
-                SessionState.EraseString(SessionKey);
+                SessionState.EraseString(sessionKey);
                 SetState(GoogleSheetImportState.Completed, $"Import completed. {completedCount} ScriptableObject asset(s) were created or updated.");
             }
             catch (Exception exception)
             {
-                SessionState.EraseString(SessionKey);
+                SessionState.EraseString(sessionKey);
                 SetState(GoogleSheetImportState.Failed, $"Import failed.\n{exception.Message}");
                 Debug.LogError($"Google Sheet asset generation failed: {exception}");
             }
             finally
             {
-                _processing = false;
+                processing = false;
             }
         }
 
@@ -181,12 +181,12 @@ namespace PschLib.GoogleSheets
 
         private static bool HasPendingImports()
         {
-            return !string.IsNullOrWhiteSpace(SessionState.GetString(SessionKey, string.Empty));
+            return !string.IsNullOrWhiteSpace(SessionState.GetString(sessionKey, string.Empty));
         }
 
         private static PendingImports ReadPending()
         {
-            var json = SessionState.GetString(SessionKey, string.Empty);
+            var json = SessionState.GetString(sessionKey, string.Empty);
 
             if (string.IsNullOrWhiteSpace(json))
             {
@@ -198,8 +198,8 @@ namespace PschLib.GoogleSheets
 
         private static void SetState(GoogleSheetImportState state, string message)
         {
-            SessionState.SetInt(StateKey, (int)state);
-            SessionState.SetString(StatusKey, message);
+            SessionState.SetInt(stateKey, (int)state);
+            SessionState.SetString(statusKey, message);
         }
     }
 }

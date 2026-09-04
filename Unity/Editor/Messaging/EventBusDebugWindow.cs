@@ -7,9 +7,9 @@ namespace PschLib.Messaging
 {
     public sealed class EventBusDebugWindow : EditorWindow
     {
-        private readonly List<EventBus.DebugInfo> _debugInfo = new List<EventBus.DebugInfo>();
-        private readonly Dictionary<Type, bool> _foldoutStates = new Dictionary<Type, bool>();
-        private Vector2 _scrollPosition;
+        private readonly List<EventBus.DebugInfo> debugInfo = new List<EventBus.DebugInfo>();
+        private readonly Dictionary<Type, bool> foldoutStates = new Dictionary<Type, bool>();
+        private Vector2 scrollPosition;
 
         [MenuItem("Window/PschLib/Event Bus Debugger")]
         private static void Open()
@@ -29,26 +29,26 @@ namespace PschLib.Messaging
 
         private void OnGUI()
         {
-            EventBus.GetDebugInfo(_debugInfo);
+            EventBus.GetDebugInfo(debugInfo);
 
-            EditorGUILayout.LabelField("Active Listeners", _debugInfo.Count.ToString(), EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("Active Listeners", debugInfo.Count.ToString(), EditorStyles.boldLabel);
             EditorGUILayout.Space();
 
-            if (_debugInfo.Count == 0)
+            if (debugInfo.Count == 0)
             {
                 EditorGUILayout.HelpBox("There are no active EventBus listeners.", MessageType.Info);
                 return;
             }
 
-            _scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition);
+            scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
 
             var index = 0;
-            while (index < _debugInfo.Count)
+            while (index < debugInfo.Count)
             {
-                var eventType = _debugInfo[index].EventType;
+                var eventType = debugInfo[index].EventType;
                 var endIndex = index + 1;
 
-                while (endIndex < _debugInfo.Count && _debugInfo[endIndex].EventType == eventType)
+                while (endIndex < debugInfo.Count && debugInfo[endIndex].EventType == eventType)
                 {
                     endIndex++;
                 }
@@ -63,14 +63,14 @@ namespace PschLib.Messaging
         private void DrawEventGroup(Type eventType, int startIndex, int endIndex)
         {
             bool isExpanded;
-            if (!_foldoutStates.TryGetValue(eventType, out isExpanded))
+            if (!foldoutStates.TryGetValue(eventType, out isExpanded))
             {
                 isExpanded = true;
             }
 
             var eventTypeName = eventType.FullName ?? eventType.Name;
             isExpanded = EditorGUILayout.Foldout(isExpanded, $"{eventTypeName} ({endIndex - startIndex})", true);
-            _foldoutStates[eventType] = isExpanded;
+            foldoutStates[eventType] = isExpanded;
 
             if (!isExpanded)
             {
@@ -81,7 +81,7 @@ namespace PschLib.Messaging
 
             for (var i = startIndex; i < endIndex; i++)
             {
-                DrawListener(_debugInfo[i]);
+                DrawListener(debugInfo[i]);
             }
 
             EditorGUI.indentLevel--;

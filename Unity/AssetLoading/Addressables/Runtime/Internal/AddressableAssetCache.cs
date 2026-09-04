@@ -11,17 +11,17 @@ namespace PschLib.AssetLoading.Addressables.Internal
 {
     internal sealed class AddressableAssetCache
     {
-        private readonly Dictionary<AddressableAssetKey, Entry> _entries =
+        private readonly Dictionary<AddressableAssetKey, Entry> entries =
             new Dictionary<AddressableAssetKey, Entry>();
 
-        public int Count => _entries.Count;
+        public int Count => entries.Count;
         public int ActiveCount
         {
             get
             {
                 var count = 0;
 
-                foreach (var entry in _entries.Values)
+                foreach (var entry in entries.Values)
                 {
                     if (entry.ReferenceCount > 0)
                     {
@@ -37,7 +37,7 @@ namespace PschLib.AssetLoading.Addressables.Internal
         {
             var key = new AddressableAssetKey(address, typeof(TAsset));
 
-            if (!_entries.TryGetValue(key, out var entry))
+            if (!entries.TryGetValue(key, out var entry))
             {
                 asset = null;
                 return false;
@@ -45,7 +45,7 @@ namespace PschLib.AssetLoading.Addressables.Internal
 
             if (entry.Asset == null || !entry.Handle.IsValid())
             {
-                _entries.Remove(key);
+                entries.Remove(key);
 
                 if (entry.Handle.IsValid())
                 {
@@ -65,7 +65,7 @@ namespace PschLib.AssetLoading.Addressables.Internal
         {
             var key = new AddressableAssetKey(address, typeof(TAsset));
 
-            if (!_entries.TryGetValue(key, out var entry))
+            if (!entries.TryGetValue(key, out var entry))
             {
                 asset = null;
                 return false;
@@ -73,7 +73,7 @@ namespace PschLib.AssetLoading.Addressables.Internal
 
             if (entry.Asset == null || !entry.Handle.IsValid())
             {
-                _entries.Remove(key);
+                entries.Remove(key);
                 ReleaseHandle(entry.Handle);
                 asset = null;
                 return false;
@@ -99,20 +99,20 @@ namespace PschLib.AssetLoading.Addressables.Internal
 
             var key = new AddressableAssetKey(address, typeof(TAsset));
 
-            if (_entries.ContainsKey(key))
+            if (entries.ContainsKey(key))
             {
                 throw new InvalidOperationException(
                     $"Addressable asset is already cached: {address} ({typeof(TAsset).Name})");
             }
 
-            _entries.Add(key, new Entry(asset, handle, referenceCount));
+            entries.Add(key, new Entry(asset, handle, referenceCount));
         }
 
         public AddressableReleaseResult Release<TAsset>(string address) where TAsset : Object
         {
             var key = new AddressableAssetKey(address, typeof(TAsset));
 
-            if (!_entries.TryGetValue(key, out var entry))
+            if (!entries.TryGetValue(key, out var entry))
             {
                 return AddressableReleaseResult.NotFound;
             }
@@ -133,7 +133,7 @@ namespace PschLib.AssetLoading.Addressables.Internal
         {
             var key = new AddressableAssetKey(address, typeof(TAsset));
 
-            if (!_entries.TryGetValue(key, out var entry))
+            if (!entries.TryGetValue(key, out var entry))
             {
                 handle = default;
                 return AddressableUnloadResult.NotFound;
@@ -145,7 +145,7 @@ namespace PschLib.AssetLoading.Addressables.Internal
                 return AddressableUnloadResult.InUse;
             }
 
-            _entries.Remove(key);
+            entries.Remove(key);
             handle = entry.Handle;
             return AddressableUnloadResult.Unloaded;
         }
@@ -154,7 +154,7 @@ namespace PschLib.AssetLoading.Addressables.Internal
         {
             var unusedKeys = new List<AddressableAssetKey>();
 
-            foreach (var pair in _entries)
+            foreach (var pair in entries)
             {
                 if (pair.Value.ReferenceCount == 0)
                 {
@@ -165,8 +165,8 @@ namespace PschLib.AssetLoading.Addressables.Internal
             for (var i = 0; i < unusedKeys.Count; i++)
             {
                 var key = unusedKeys[i];
-                var handle = _entries[key].Handle;
-                _entries.Remove(key);
+                var handle = entries[key].Handle;
+                entries.Remove(key);
                 ReleaseHandle(handle);
             }
 
@@ -175,12 +175,12 @@ namespace PschLib.AssetLoading.Addressables.Internal
 
         public void Clear()
         {
-            foreach (var entry in _entries.Values)
+            foreach (var entry in entries.Values)
             {
                 ReleaseHandle(entry.Handle);
             }
 
-            _entries.Clear();
+            entries.Clear();
         }
 
 #if UNITY_EDITOR
@@ -188,7 +188,7 @@ namespace PschLib.AssetLoading.Addressables.Internal
         {
             entries.Clear();
 
-            foreach (var pair in _entries)
+            foreach (var pair in this.entries)
             {
                 entries.Add(new AssetLoaderDebugEntry(pair.Key.Address,
                     pair.Key.AssetType.Name, pair.Value.ReferenceCount));

@@ -7,16 +7,16 @@ namespace PschLib.GoogleSheets
 {
     public sealed class GoogleSheetGeneratorWindow : EditorWindow
     {
-        private readonly List<GoogleSheetProjectItem> _remoteProjects = new List<GoogleSheetProjectItem>();
-        private Vector2 _scrollPosition;
-        private string _statusMessage;
-        private MessageType _statusType;
-        private int _selectedRemoteProject;
-        private bool _isBusy;
+        private readonly List<GoogleSheetProjectItem> remoteProjects = new List<GoogleSheetProjectItem>();
+        private Vector2 scrollPosition;
+        private string statusMessage;
+        private MessageType statusType;
+        private int selectedRemoteProject;
+        private bool isBusy;
 
         private GoogleSheetSettings Settings => GoogleSheetSettings.instance;
         private GoogleSheetProject Project => Settings.Project;
-        private bool IsLocked => _isBusy || GoogleSheetPendingImportProcessor.IsImporting || EditorApplication.isCompiling;
+        private bool IsLocked => isBusy || GoogleSheetPendingImportProcessor.IsImporting || EditorApplication.isCompiling;
 
         [MenuItem("Tools/PschLib/Google Sheet Generator")]
         public static void Open()
@@ -75,7 +75,7 @@ namespace PschLib.GoogleSheets
                 {
                     Settings.Server = server;
                     Settings.Project = null;
-                    _remoteProjects.Clear();
+                    remoteProjects.Clear();
                     Settings.SaveSettings();
                 }
             }
@@ -84,7 +84,7 @@ namespace PschLib.GoogleSheets
 
             using (new EditorGUI.DisabledScope(IsLocked || Settings.Server == null || !Settings.Server.IsConfigured))
             {
-                if (GUILayout.Button(_isBusy ? "Loading..." : "Load Projects"))
+                if (GUILayout.Button(isBusy ? "Loading..." : "Load Projects"))
                 {
                     LoadProjects();
                 }
@@ -121,7 +121,7 @@ namespace PschLib.GoogleSheets
 
                         if (serverChanged)
                         {
-                            _remoteProjects.Clear();
+                            remoteProjects.Clear();
                             EditorApplication.delayCall += LoadProjectsIfAvailable;
                         }
                     }
@@ -132,23 +132,23 @@ namespace PschLib.GoogleSheets
 
             DrawProjectRegistration();
 
-            if (_remoteProjects.Count == 0)
+            if (remoteProjects.Count == 0)
             {
                 EditorGUILayout.HelpBox("Select a server and click Load Projects.", MessageType.Info);
                 return;
             }
 
-            var names = new string[_remoteProjects.Count];
+            var names = new string[remoteProjects.Count];
 
-            for (var index = 0; index < _remoteProjects.Count; index++)
+            for (var index = 0; index < remoteProjects.Count; index++)
             {
-                var remoteProject = _remoteProjects[index];
+                var remoteProject = remoteProjects[index];
                 names[index] = $"{remoteProject.Key} ({remoteProject.Name})";
             }
 
             using (new EditorGUI.DisabledScope(IsLocked))
             {
-                _selectedRemoteProject = EditorGUILayout.Popup("Project", _selectedRemoteProject, names);
+                selectedRemoteProject = EditorGUILayout.Popup("Project", selectedRemoteProject, names);
 
                 EditorGUILayout.BeginHorizontal();
 
@@ -175,7 +175,7 @@ namespace PschLib.GoogleSheets
                 if (GUILayout.Button("Register New Project..."))
                 {
                     var server = Settings.Server;
-                    GoogleSheetProjectRegistrationWindow.Open(server, _remoteProjects, project => HandleProjectRegistered(server, project));
+                    GoogleSheetProjectRegistrationWindow.Open(server, remoteProjects, project => HandleProjectRegistered(server, project));
                 }
             }
         }
@@ -255,7 +255,7 @@ namespace PschLib.GoogleSheets
                 return;
             }
 
-            _scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition);
+            scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
 
             foreach (var sheet in Project.Sheets)
             {
@@ -307,13 +307,13 @@ namespace PschLib.GoogleSheets
 
         private void DrawStatus()
         {
-            if (string.IsNullOrWhiteSpace(_statusMessage))
+            if (string.IsNullOrWhiteSpace(statusMessage))
             {
                 return;
             }
 
             EditorGUILayout.Space();
-            EditorGUILayout.HelpBox(_statusMessage, _statusType);
+            EditorGUILayout.HelpBox(statusMessage, statusType);
         }
 
         private async void LoadProjects()
@@ -323,10 +323,10 @@ namespace PschLib.GoogleSheets
             try
             {
                 var projects = await GoogleSheetRegistryService.GetProjectsAsync(Settings.Server);
-                _remoteProjects.Clear();
-                _remoteProjects.AddRange(projects);
-                _selectedRemoteProject = FindSelectedRemoteProject();
-                SetStatus($"Loaded {_remoteProjects.Count} project(s).", MessageType.Info);
+                remoteProjects.Clear();
+                remoteProjects.AddRange(projects);
+                selectedRemoteProject = FindSelectedRemoteProject();
+                SetStatus($"Loaded {remoteProjects.Count} project(s).", MessageType.Info);
             }
             catch (Exception exception)
             {
@@ -348,7 +348,7 @@ namespace PschLib.GoogleSheets
 
         private async void UseSelectedProject()
         {
-            if (_selectedRemoteProject < 0 || _selectedRemoteProject >= _remoteProjects.Count)
+            if (selectedRemoteProject < 0 || selectedRemoteProject >= remoteProjects.Count)
             {
                 return;
             }
@@ -357,7 +357,7 @@ namespace PschLib.GoogleSheets
 
             try
             {
-                Settings.Project = await GoogleSheetRegistryService.GetOrCreateProjectAsync(Settings.Server, _remoteProjects[_selectedRemoteProject]);
+                Settings.Project = await GoogleSheetRegistryService.GetOrCreateProjectAsync(Settings.Server, remoteProjects[selectedRemoteProject]);
                 Settings.SaveSettings();
                 SetStatus($"Using project '{Settings.Project.ProjectKey}'. {Settings.Project.Sheets.Count} sheet(s) loaded.", MessageType.Info);
             }
@@ -373,13 +373,13 @@ namespace PschLib.GoogleSheets
 
         private void OpenSelectedSheet()
         {
-            if (_selectedRemoteProject < 0 || _selectedRemoteProject >= _remoteProjects.Count)
+            if (selectedRemoteProject < 0 || selectedRemoteProject >= remoteProjects.Count)
             {
                 SetStatus("Select a Registry project first.", MessageType.Warning);
                 return;
             }
 
-            var spreadsheetId = _remoteProjects[_selectedRemoteProject].SpreadsheetId;
+            var spreadsheetId = remoteProjects[selectedRemoteProject].SpreadsheetId;
 
             if (!GoogleSheetRegistryService.TryExtractSpreadsheetId(spreadsheetId, out var normalizedSpreadsheetId, out var error))
             {
@@ -408,17 +408,17 @@ namespace PschLib.GoogleSheets
             try
             {
                 var projects = await GoogleSheetRegistryService.GetProjectsAsync(server);
-                _remoteProjects.Clear();
-                _remoteProjects.AddRange(projects);
-                _selectedRemoteProject = FindRemoteProjectIndex(registeredProject.SpreadsheetId);
+                remoteProjects.Clear();
+                remoteProjects.AddRange(projects);
+                selectedRemoteProject = FindRemoteProjectIndex(registeredProject.SpreadsheetId);
 
-                if (_selectedRemoteProject < 0)
+                if (selectedRemoteProject < 0)
                 {
                     throw new InvalidOperationException($"Registered project '{registeredProject.Key}' was not found after refreshing the Registry.");
                 }
 
                 Settings.Server = server;
-                Settings.Project = await GoogleSheetRegistryService.GetOrCreateProjectAsync(server, _remoteProjects[_selectedRemoteProject]);
+                Settings.Project = await GoogleSheetRegistryService.GetOrCreateProjectAsync(server, remoteProjects[selectedRemoteProject]);
                 Settings.SaveSettings();
                 SetStatus($"Registered and selected project '{Settings.Project.ProjectKey}'.", MessageType.Info);
             }
@@ -566,9 +566,9 @@ namespace PschLib.GoogleSheets
 
         private int FindRemoteProjectIndex(string spreadsheetId)
         {
-            for (var index = 0; index < _remoteProjects.Count; index++)
+            for (var index = 0; index < remoteProjects.Count; index++)
             {
-                if (_remoteProjects[index].SpreadsheetId == spreadsheetId)
+                if (remoteProjects[index].SpreadsheetId == spreadsheetId)
                 {
                     return index;
                 }
@@ -585,14 +585,14 @@ namespace PschLib.GoogleSheets
 
         private void SetBusy(bool isBusy)
         {
-            _isBusy = isBusy;
+            this.isBusy = isBusy;
             Repaint();
         }
 
         private void SetStatus(string message, MessageType type)
         {
-            _statusMessage = message;
-            _statusType = type;
+            statusMessage = message;
+            statusType = type;
             Repaint();
         }
     }

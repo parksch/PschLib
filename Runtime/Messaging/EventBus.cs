@@ -5,10 +5,10 @@ namespace PschLib.Messaging
 {
     public static class EventBus
     {
-        private static readonly Dictionary<Type, List<Listener>> Listeners = new Dictionary<Type, List<Listener>>();
-        private static readonly List<Listener> PendingListeners = new List<Listener>();
-        private static long _nextListenerId;
-        private static int _publishDepth;
+        private static readonly Dictionary<Type, List<Listener>> listenersByType = new Dictionary<Type, List<Listener>>();
+        private static readonly List<Listener> pendingListeners = new List<Listener>();
+        private static long nextListenerId;
+        private static int publishDepth;
 #if UNITY_EDITOR
         public static event Action DebugListenersChanged;
 #endif
@@ -21,17 +21,17 @@ namespace PschLib.Messaging
             }
 
             var eventType = typeof(TEvent);
-            var listenerId = ++_nextListenerId;
+            var listenerId = ++nextListenerId;
 
             var listener = new Listener(listenerId, eventType, handler);
-            if (_publishDepth == 0)
+            if (publishDepth == 0)
             {
                 AddListener(listener);
                 NotifyDebugListenersChanged();
             }
             else
             {
-                PendingListeners.Add(listener);
+                pendingListeners.Add(listener);
             }
 
             return new Subscription(() => Unsubscribe(eventType, listenerId));
@@ -41,12 +41,12 @@ namespace PschLib.Messaging
         {
             var eventType = typeof(TEvent);
             List<Listener> listeners;
-            if (!Listeners.TryGetValue(eventType, out listeners) || listeners.Count == 0)
+            if (!listenersByType.TryGetValue(eventType, out listeners) || listeners.Count == 0)
             {
                 return;
             }
 
-            _publishDepth++;
+            publishDepth++;
 
             try
             {
@@ -62,8 +62,8 @@ namespace PschLib.Messaging
             }
             finally
             {
-                _publishDepth--;
-                if (_publishDepth == 0)
+                publishDepth--;
+                if (publishDepth == 0)
                 {
                     ApplyPendingChanges();
                 }
@@ -72,8 +72,8 @@ namespace PschLib.Messaging
 
         public static void Clear()
         {
-            Listeners.Clear();
-            PendingListeners.Clear();
+            listenersByType.Clear();
+            pendingListeners.Clear();
             NotifyDebugListenersChanged();
         }
 
@@ -87,7 +87,7 @@ namespace PschLib.Messaging
 
             results.Clear();
 
-            foreach (var pair in Listeners)
+            foreach (var pair in listenersByType)
             {
                 var listeners = pair.Value;
 
@@ -129,14 +129,14 @@ namespace PschLib.Messaging
         private static void Unsubscribe(Type eventType, long listenerId)
         {
             List<Listener> listeners;
-            if (Listeners.TryGetValue(eventType, out listeners) && MarkDisposed(listeners, listenerId))
+            if (listenersByType.TryGetValue(eventType, out listeners) && MarkDisposed(listeners, listenerId))
             {
-                if (_publishDepth == 0)
+                if (publishDepth == 0)
                 {
                     RemoveDisposed(listeners);
                     if (listeners.Count == 0)
                     {
-                        Listeners.Remove(eventType);
+                        listenersByType.Remove(eventType);
                     }
                 }
 
@@ -145,7 +145,7 @@ namespace PschLib.Messaging
                 return;
             }
 
-            MarkDisposed(PendingListeners, listenerId);
+            MarkDisposed(pendingListeners, listenerId);
         }
 
         private static bool MarkDisposed(List<Listener> listeners, long listenerId)
@@ -165,10 +165,10 @@ namespace PschLib.Messaging
         private static void AddListener(Listener listener)
         {
             List<Listener> listeners;
-            if (!Listeners.TryGetValue(listener.EventType, out listeners))
+            if (!listenersByType.TryGetValue(listener.EventType, out listeners))
             {
                 listeners = new List<Listener>();
-                Listeners.Add(listener.EventType, listeners);
+                listenersByType.Add(listener.EventType, listeners);
             }
 
             listeners.Add(listener);
@@ -176,23 +176,23 @@ namespace PschLib.Messaging
 
         private static void ApplyPendingChanges()
         {
-            var hasPendingListeners = PendingListeners.Count > 0;
+            var hasPendingListeners = pendingListeners.Count > 0;
 
-            foreach (var pair in Listeners)
+            foreach (var pair in listenersByType)
             {
                 RemoveDisposed(pair.Value);
             }
 
-            for (var i = 0; i < PendingListeners.Count; i++)
+            for (var i = 0; i < pendingListeners.Count; i++)
             {
-                var listener = PendingListeners[i];
+                var listener = pendingListeners[i];
                 if (!listener.IsDisposed)
                 {
                     AddListener(listener);
                 }
             }
 
-            PendingListeners.Clear();
+            pendingListeners.Clear();
 
             if (hasPendingListeners)
             {
@@ -236,21 +236,21 @@ namespace PschLib.Messaging
 
         private sealed class Subscription : IDisposable
         {
-            private Action _unsubscribe;
+            private Action unsubscribe;
 
             public Subscription(Action unsubscribe)
             {
-                _unsubscribe = unsubscribe;
+                this.unsubscribe = unsubscribe;
             }
 
             public void Dispose()
             {
-                var unsubscribe = _unsubscribe;
-                _unsubscribe = null;
+                var callback = unsubscribe;
+                unsubscribe = null;
 
-                if (unsubscribe != null)
+                if (callback != null)
                 {
-                    unsubscribe();
+                    callback();
                 }
             }
         }
