@@ -76,7 +76,15 @@ namespace PschLib.StateMachines
             currentState = state;
             isStarted = true;
 
-            currentState.Enter(context);
+            try
+            {
+                currentState.Enter(context);
+            }
+            catch
+            {
+                ResetState();
+                throw;
+            }
             NotifyDebugStateChanged();
         }
 
@@ -97,13 +105,7 @@ namespace PschLib.StateMachines
             }
             finally
             {
-                currentState = null;
-                currentStateKey = default;
-                isStarted = false;
-
-                hasPendingState = false;
-                pendingStateKey = default;
-                pendingPriority = 0;
+                ResetState();
                 NotifyDebugStateChanged();
             }
         }
@@ -165,14 +167,33 @@ namespace PschLib.StateMachines
         {
             var previousStateKey = currentStateKey;
 
-            currentState.Exit(context);
+            try
+            {
+                currentState.Exit(context);
 
-            currentStateKey = key;
-            currentState = nextState;
+                currentStateKey = key;
+                currentState = nextState;
 
-            currentState.Enter(context);
+                currentState.Enter(context);
+            }
+            catch
+            {
+                ResetState();
+                throw;
+            }
+
             StateChanged?.Invoke(previousStateKey, key);
             NotifyDebugStateChanged();
+        }
+
+        private void ResetState()
+        {
+            currentState = null;
+            currentStateKey = default;
+            isStarted = false;
+            hasPendingState = false;
+            pendingStateKey = default;
+            pendingPriority = 0;
         }
 
         private IState<TContext> GetRegisteredState(TState key)

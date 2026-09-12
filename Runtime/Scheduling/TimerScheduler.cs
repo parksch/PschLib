@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.ExceptionServices;
 
 namespace PschLib.Scheduling
 {
@@ -20,9 +21,9 @@ namespace PschLib.Scheduling
 
         public int Count => clearRequested ? pendingEntries.Count : entries.Count + pendingEntries.Count;
 
-        public TimerHandle Schedule(float duration, Action callback = null, TimerTimeMode timeMode = TimerTimeMode.Scaled, bool startPaused = false)
+        public TimerHandle Schedule(float duration, Action callback = null, TimerTimeMode timeMode = TimerTimeMode.Scaled, bool startPaused = false, bool repeat = false, int repeatCount = 0)
         {
-            var entry = new TimerEntry(duration, timeMode, callback, startPaused);
+            var entry = new TimerEntry(duration, timeMode, callback, startPaused, repeat, repeatCount);
 
             if (isTicking)
             {
@@ -48,6 +49,7 @@ namespace PschLib.Scheduling
             }
 
             isTicking = true;
+            List<Exception> failures = null;
 
             try
             {
@@ -67,14 +69,19 @@ namespace PschLib.Scheduling
                             entries.RemoveAt(i);
                         }
                     }
-                    catch
+                    catch (Exception exception)
                     {
                         if (entry.Handle.IsFinished)
                         {
                             entries.RemoveAt(i);
                         }
 
-                        throw;
+                        if (failures == null)
+                        {
+                            failures = new List<Exception>();
+                        }
+
+                        failures.Add(exception);
                     }
                 }
             }
@@ -95,6 +102,16 @@ namespace PschLib.Scheduling
                 }
 
                 NotifyDebugStateChanged();
+            }
+
+            if (failures != null)
+            {
+                if (failures.Count == 1)
+                {
+                    ExceptionDispatchInfo.Capture(failures[0]).Throw();
+                }
+
+                throw new AggregateException("Timer callbacks failed.", failures);
             }
         }
 

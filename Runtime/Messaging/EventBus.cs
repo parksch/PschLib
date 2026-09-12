@@ -72,6 +72,14 @@ namespace PschLib.Messaging
 
         public static void Clear()
         {
+            foreach (var listeners in listenersByType.Values)
+            {
+                for (var i = 0; i < listeners.Count; i++)
+                {
+                    listeners[i].IsDisposed = true;
+                }
+            }
+
             listenersByType.Clear();
             pendingListeners.Clear();
             NotifyDebugListenersChanged();

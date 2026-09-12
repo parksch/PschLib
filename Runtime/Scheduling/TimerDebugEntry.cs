@@ -9,6 +9,9 @@ namespace PschLib.Scheduling
         public readonly float ElapsedTime;
         public readonly float RemainingTime;
         public readonly float Progress;
+        public readonly bool IsRepeating;
+        public readonly int RepeatCount;
+        public readonly int CompletedCount;
         public readonly bool IsPending;
 
         public TimerDebugEntry(TimerHandle handle, TimerTimeMode timeMode, bool isPending)
@@ -19,6 +22,9 @@ namespace PschLib.Scheduling
             ElapsedTime = handle.ElapsedTime;
             RemainingTime = handle.RemainingTime;
             Progress = handle.Progress;
+            IsRepeating = handle.IsRepeating;
+            RepeatCount = handle.RepeatCount;
+            CompletedCount = handle.CompletedCount;
             IsPending = isPending;
         }
     }

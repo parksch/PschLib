@@ -8,6 +8,9 @@ namespace PschLib.Scheduling
 
         public float Duration { get; }
         public float ElapsedTime { get; private set; }
+        public bool IsRepeating { get; }
+        public int RepeatCount { get; }
+        public int CompletedCount { get; private set; }
 
         public float RemainingTime => Math.Max(0f, Duration - ElapsedTime);
 
@@ -19,9 +22,11 @@ namespace PschLib.Scheduling
         public bool IsCancelled => State == TimerState.Cancelled;
         public bool IsFinished => IsCompleted || IsCancelled;
 
-        internal TimerHandle(float duration, bool startPaused)
+        internal TimerHandle(float duration, bool startPaused, bool repeat, int repeatCount)
         {
             Duration = duration;
+            IsRepeating = repeat;
+            RepeatCount = repeat ? repeatCount : 1;
             State = startPaused ? TimerState.Paused : TimerState.Running;
         }
 
@@ -65,7 +70,22 @@ namespace PschLib.Scheduling
                 return;
             }
 
-            ElapsedTime = Math.Min(Duration, ElapsedTime + deltaTime);
+            ElapsedTime += deltaTime;
+        }
+
+        internal bool FinishCycle()
+        {
+            CompletedCount++;
+
+            if (RepeatCount > 0 && CompletedCount >= RepeatCount)
+            {
+                ElapsedTime = Duration;
+                State = TimerState.Completed;
+                return true;
+            }
+
+            ElapsedTime = Math.Max(0f, ElapsedTime - Duration);
+            return false;
         }
 
         internal bool Complete()
@@ -76,6 +96,7 @@ namespace PschLib.Scheduling
             }
 
             ElapsedTime = Duration;
+            CompletedCount = 1;
             State = TimerState.Completed;
             return true;
         }

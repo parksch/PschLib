@@ -65,6 +65,12 @@ namespace PschLib.Unity.Editor.Scheduling
                     EditorGUI.indentLevel++;
                     EditorGUILayout.LabelField("State", entry.State.ToString());
                     EditorGUILayout.LabelField("Time Mode", entry.TimeMode.ToString());
+                    EditorGUILayout.LabelField("Repeating", entry.IsRepeating.ToString());
+                    if (entry.IsRepeating)
+                    {
+                        EditorGUILayout.LabelField("Repeat Count", entry.RepeatCount == 0 ? "Infinite" : entry.RepeatCount.ToString());
+                        EditorGUILayout.LabelField("Completed Count", entry.CompletedCount.ToString());
+                    }
                     EditorGUILayout.LabelField("Duration", FormatSeconds(entry.Duration));
                     EditorGUILayout.LabelField("Elapsed", FormatSeconds(entry.ElapsedTime));
                     EditorGUILayout.LabelField("Remaining", FormatSeconds(entry.RemainingTime));
