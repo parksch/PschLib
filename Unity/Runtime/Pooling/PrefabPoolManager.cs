@@ -4,9 +4,7 @@ using System.Collections;
 #endif
 using System.Collections.Generic;
 using UnityEngine;
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
 using UnityEngine.SceneManagement;
-#endif
 
 namespace PschLib.Unity.Pooling
 {
@@ -23,8 +21,8 @@ namespace PschLib.Unity.Pooling
         private readonly Dictionary<Scene, int> unexpectedDestroyCounts = new Dictionary<Scene, int>();
 #endif
         private bool isInitialized;
-        private bool isDestroying;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
+        private bool isDestroying;
         private bool isDestroyWarningScheduled;
 #endif
 
@@ -81,7 +79,9 @@ namespace PschLib.Unity.Pooling
 
         private void OnDestroy()
         {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
             isDestroying = true;
+#endif
             RemoveDestroyedInstanceReferences();
 
             if (inUseInstancePools.Count > 0)
