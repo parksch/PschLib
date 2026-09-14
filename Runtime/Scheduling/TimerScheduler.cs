@@ -21,9 +21,22 @@ namespace PschLib.Scheduling
 
         public int Count => clearRequested ? pendingEntries.Count : entries.Count + pendingEntries.Count;
 
-        public TimerHandle Schedule(float duration, Action callback = null, TimerTimeMode timeMode = TimerTimeMode.Scaled, bool startPaused = false, bool repeat = false, int repeatCount = 0)
+        public TimerHandle Schedule(float duration, Action callback = null, TimerTimeMode timeMode = TimerTimeMode.Scaled, bool startPaused = false)
         {
-            var entry = new TimerEntry(duration, timeMode, callback, startPaused, repeat, repeatCount);
+            return ScheduleInternal(duration, callback, timeMode, startPaused, false, 0, TimerOverflowMode.Discard);
+        }
+
+        public TimerHandle ScheduleRepeating(float interval, Action callback = null, int repeatCount = 0,
+            TimerTimeMode timeMode = TimerTimeMode.Scaled, TimerOverflowMode overflowMode = TimerOverflowMode.Discard,
+            bool startPaused = false)
+        {
+            return ScheduleInternal(interval, callback, timeMode, startPaused, true, repeatCount, overflowMode);
+        }
+
+        private TimerHandle ScheduleInternal(float duration, Action callback, TimerTimeMode timeMode, bool startPaused,
+            bool repeat, int repeatCount, TimerOverflowMode overflowMode)
+        {
+            var entry = new TimerEntry(duration, timeMode, callback, startPaused, repeat, repeatCount, overflowMode);
 
             if (isTicking)
             {
@@ -185,7 +198,7 @@ namespace PschLib.Scheduling
             for (var i = 0; i < source.Count; i++)
             {
                 var entry = source[i];
-                results.Add(new TimerDebugEntry(entry.Handle, entry.TimeMode, isPending));
+                results.Add(new TimerDebugEntry(entry.Handle, entry.TimeMode, entry.OverflowMode, isPending));
             }
         }
 #endif

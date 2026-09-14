@@ -68,6 +68,7 @@ namespace PschLib.Unity.Editor.Scheduling
                     EditorGUILayout.LabelField("Repeating", entry.IsRepeating.ToString());
                     if (entry.IsRepeating)
                     {
+                        EditorGUILayout.LabelField("Overflow Mode", entry.OverflowMode.ToString());
                         EditorGUILayout.LabelField("Repeat Count", entry.RepeatCount == 0 ? "Infinite" : entry.RepeatCount.ToString());
                         EditorGUILayout.LabelField("Completed Count", entry.CompletedCount.ToString());
                     }

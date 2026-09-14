@@ -10,7 +10,7 @@ namespace PschLib.Unity.Debugging
         where TViewer : MonoBehaviour
         where TDebugInfo : class
     {
-        private readonly List<DebugTarget> targets = new List<DebugTarget>();
+        private readonly List<DebugTarget> debugTargets = new List<DebugTarget>();
         private readonly List<TDebugInfo> foundDebugInfos = new List<TDebugInfo>();
         private readonly List<TDebugInfo> subscribedDebugInfos = new List<TDebugInfo>();
 
@@ -31,13 +31,13 @@ namespace PschLib.Unity.Debugging
             RefreshTargets();
             RefreshSubscriptions();
 
-            for (var i = 0; i < targets.Count; i++)
+            for (var i = 0; i < debugTargets.Count; i++)
             {
-                var debugTarget = targets[i];
+                var debugTarget = debugTargets[i];
                 DrawDebugInfo(debugTarget.Component, debugTarget.FieldName, debugTarget.DebugInfo);
             }
 
-            if (targets.Count == 0)
+            if (debugTargets.Count == 0)
             {
                 EditorGUILayout.HelpBox(EmptyMessage, MessageType.Info);
             }
@@ -54,7 +54,7 @@ namespace PschLib.Unity.Debugging
 
         private void RefreshTargets()
         {
-            targets.Clear();
+            debugTargets.Clear();
             foundDebugInfos.Clear();
 
             if (!(target is TViewer viewer))
@@ -91,7 +91,7 @@ namespace PschLib.Unity.Debugging
                         continue;
                     }
 
-                    targets.Add(new DebugTarget(component, fields[i].Name, debugInfo));
+                    debugTargets.Add(new DebugTarget(component, fields[i].Name, debugInfo));
 
                     if (!foundDebugInfos.Contains(debugInfo))
                     {
@@ -105,7 +105,7 @@ namespace PschLib.Unity.Debugging
 
         private void RefreshSubscriptions()
         {
-            if (targets.Count == 0)
+            if (debugTargets.Count == 0)
             {
                 RefreshTargets();
             }

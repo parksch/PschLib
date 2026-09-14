@@ -90,10 +90,11 @@ namespace PschLib.AssetLoading.Addressables
         private async UniTask LoadPendingAsync<TAsset>(string address, AddressableAssetKey key,
             PendingLoad pendingLoad, int generation) where TAsset : Object
         {
-            var handle = UnityAddressables.LoadAssetAsync<TAsset>(address);
+            AsyncOperationHandle<TAsset> handle = default;
 
             try
             {
+                handle = UnityAddressables.LoadAssetAsync<TAsset>(address);
                 var asset = await handle.ToUniTask();
 
                 if (handle.Status != AsyncOperationStatus.Succeeded || asset == null)

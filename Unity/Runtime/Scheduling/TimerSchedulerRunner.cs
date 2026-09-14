@@ -11,9 +11,16 @@ namespace PschLib.Unity.Scheduling
 
         public int Count => scheduler.Count;
 
-        public TimerHandle Schedule(float duration, Action callback = null, TimerTimeMode timeMode = TimerTimeMode.Scaled, bool startPaused = false, bool repeat = false, int repeatCount = 0)
+        public TimerHandle Schedule(float duration, Action callback = null, TimerTimeMode timeMode = TimerTimeMode.Scaled, bool startPaused = false)
         {
-            return scheduler.Schedule(duration, callback, timeMode, startPaused, repeat, repeatCount);
+            return scheduler.Schedule(duration, callback, timeMode, startPaused);
+        }
+
+        public TimerHandle ScheduleRepeating(float interval, Action callback = null, int repeatCount = 0,
+            TimerTimeMode timeMode = TimerTimeMode.Scaled, TimerOverflowMode overflowMode = TimerOverflowMode.Discard,
+            bool startPaused = false)
+        {
+            return scheduler.ScheduleRepeating(interval, callback, repeatCount, timeMode, overflowMode, startPaused);
         }
 
         public void Clear()

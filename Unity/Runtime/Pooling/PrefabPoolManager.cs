@@ -1,6 +1,12 @@
 using System;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+using System.Collections;
+#endif
 using System.Collections.Generic;
 using UnityEngine;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+using UnityEngine.SceneManagement;
+#endif
 
 namespace PschLib.Unity.Pooling
 {
@@ -13,7 +19,14 @@ namespace PschLib.Unity.Pooling
         private readonly Dictionary<string, PrefabPool> pools = new Dictionary<string, PrefabPool>(StringComparer.Ordinal);
         private readonly Dictionary<GameObject, PrefabPool> inUseInstancePools = new Dictionary<GameObject, PrefabPool>();
         private readonly List<GameObject> destroyedInstances = new List<GameObject>();
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        private readonly Dictionary<Scene, int> unexpectedDestroyCounts = new Dictionary<Scene, int>();
+#endif
         private bool isInitialized;
+        private bool isDestroying;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        private bool isDestroyWarningScheduled;
+#endif
 
         public int Count => pools.Count;
 
@@ -68,6 +81,7 @@ namespace PschLib.Unity.Pooling
 
         private void OnDestroy()
         {
+            isDestroying = true;
             RemoveDestroyedInstanceReferences();
 
             if (inUseInstancePools.Count > 0)
@@ -132,7 +146,7 @@ namespace PschLib.Unity.Pooling
             storageObject.transform.SetParent(transform, false);
             storageObject.SetActive(false);
 
-            var pool = new PrefabPool(prefab, storageObject.transform, maxInactiveCount);
+            var pool = new PrefabPool(prefab, storageObject.transform, this, maxInactiveCount);
             pool.Prewarm(initialCapacity);
             pools.Add(key, pool);
             NotifyDebugStateChanged();
@@ -200,6 +214,42 @@ namespace PschLib.Unity.Pooling
             }
 
             return result;
+        }
+
+        internal void NotifyTrackedObjectDestroyed(GameObject instance, PrefabPool pool, PooledObjectState state,
+            bool expectedDestroy, Scene scene)
+        {
+            inUseInstancePools.Remove(instance);
+            pool.RemoveTrackedObject(instance);
+            NotifyDebugStateChanged();
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (expectedDestroy || isDestroying)
+            {
+                return;
+            }
+
+            if (!unexpectedDestroyCounts.TryGetValue(scene, out var count))
+            {
+                count = 0;
+            }
+
+            unexpectedDestroyCounts[scene] = count + 1;
+
+            if (isDestroyWarningScheduled)
+            {
+                return;
+            }
+
+            if (!isActiveAndEnabled)
+            {
+                unexpectedDestroyCounts.Clear();
+                return;
+            }
+
+            isDestroyWarningScheduled = true;
+            StartCoroutine(ReportUnexpectedDestroys());
+#endif
         }
 
         public bool Clear(string key)
@@ -304,6 +354,36 @@ namespace PschLib.Unity.Pooling
                 pool.RemoveDestroyedInUseReferences();
             }
         }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        private IEnumerator ReportUnexpectedDestroys()
+        {
+            yield return null;
+            isDestroyWarningScheduled = false;
+            var unexpectedCount = 0;
+
+            foreach (var pair in unexpectedDestroyCounts)
+            {
+                if (pair.Key.IsValid() && pair.Key.isLoaded)
+                {
+                    unexpectedCount += pair.Value;
+                }
+            }
+
+            unexpectedDestroyCounts.Clear();
+
+            if (unexpectedCount > 0)
+            {
+                LogUnexpectedDestroy(unexpectedCount, null);
+            }
+        }
+
+        private void LogUnexpectedDestroy(int count, PooledObjectState? state)
+        {
+            string stateText = state.HasValue ? $" while {state.Value}" : string.Empty;
+            Debug.LogWarning($"PrefabPoolManager removed {count} pooled object reference(s) destroyed{stateText}. Return pooled objects with PrefabPoolManager.Return instead of destroying them.", this);
+        }
+#endif
 
         private void NotifyDebugStateChanged()
         {

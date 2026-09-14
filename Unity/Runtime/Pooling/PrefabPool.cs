@@ -10,9 +10,11 @@ namespace PschLib.Unity.Pooling
         private readonly GameObject prefab;
         private readonly Vector3 initialLocalScale;
         private readonly int maxInactiveCount;
+        private readonly PrefabPoolManager owner;
 
         private readonly Queue<GameObject> inactiveObjects = new Queue<GameObject>();
         private readonly HashSet<GameObject> inUseObjects = new HashSet<GameObject>();
+        private readonly Dictionary<GameObject, PooledObjectTracker> trackers = new Dictionary<GameObject, PooledObjectTracker>();
 
         public int InUseCount => inUseObjects.Count;
         public int InactiveCount => inactiveObjects.Count;
@@ -38,7 +40,11 @@ namespace PschLib.Unity.Pooling
             }
         }
 
-        public PrefabPool(GameObject prefab, Transform storageParent, int maxInactiveCount = 50)
+        public PrefabPool(GameObject prefab, Transform storageParent, int maxInactiveCount = 50) : this(prefab, storageParent, null, maxInactiveCount)
+        {
+        }
+
+        internal PrefabPool(GameObject prefab, Transform storageParent, PrefabPoolManager owner, int maxInactiveCount = 50)
         {
             if (prefab == null)
             {
@@ -63,6 +69,7 @@ namespace PschLib.Unity.Pooling
             this.prefab = prefab;
             initialLocalScale = prefab.transform.localScale;
             this.storageParent = storageParent;
+            this.owner = owner;
             this.maxInactiveCount = maxInactiveCount;
         }
 
@@ -82,6 +89,7 @@ namespace PschLib.Unity.Pooling
             {
                 GameObject instance = UnityEngine.Object.Instantiate(prefab, storageParent);
                 instance.SetActive(false);
+                TrackInstance(instance, false);
                 inactiveObjects.Enqueue(instance);
             }
         }
@@ -123,6 +131,7 @@ namespace PschLib.Unity.Pooling
             instance.transform.localScale = initialLocalScale;
 
             inUseObjects.Add(instance);
+            TrackInstance(instance, true);
             instance.SetActive(activate);
 
             return instance;
@@ -145,6 +154,8 @@ namespace PschLib.Unity.Pooling
 
             ValidateStorageParent();
             inUseObjects.Remove(instance);
+            trackers.TryGetValue(instance, out var tracker);
+            tracker?.MarkInactive();
             instance.SetActive(false);
 
             if (instance == null)
@@ -158,12 +169,14 @@ namespace PschLib.Unity.Pooling
 
                 if (inactiveObjects.Count >= maxInactiveCount)
                 {
+                    tracker?.MarkExpectedDestroy();
                     UnityEngine.Object.Destroy(instance);
                     return true;
                 }
             }
 
             instance.transform.SetParent(storageParent, false);
+            tracker?.MarkInactive();
 
             if (instance != null)
             {
@@ -181,7 +194,29 @@ namespace PschLib.Unity.Pooling
 
                 if (instance != null)
                 {
+                    if (trackers.TryGetValue(instance, out var tracker))
+                    {
+                        tracker?.MarkExpectedDestroy();
+                    }
+
                     UnityEngine.Object.Destroy(instance);
+                }
+            }
+        }
+
+        internal void RemoveTrackedObject(GameObject instance)
+        {
+            inUseObjects.Remove(instance);
+            trackers.Remove(instance);
+            int inactiveCount = inactiveObjects.Count;
+
+            for (int i = 0; i < inactiveCount; i++)
+            {
+                GameObject inactiveInstance = inactiveObjects.Dequeue();
+
+                if (!ReferenceEquals(inactiveInstance, instance) && inactiveInstance != null)
+                {
+                    inactiveObjects.Enqueue(inactiveInstance);
                 }
             }
         }
@@ -204,6 +239,32 @@ namespace PschLib.Unity.Pooling
                 {
                     inactiveObjects.Enqueue(instance);
                 }
+            }
+        }
+
+        private void TrackInstance(GameObject instance, bool inUse)
+        {
+            if (owner == null)
+            {
+                return;
+            }
+
+            trackers.TryGetValue(instance, out var tracker);
+
+            if (tracker == null)
+            {
+                tracker = instance.AddComponent<PooledObjectTracker>();
+                trackers[instance] = tracker;
+                tracker.Initialize(owner, this);
+            }
+
+            if (inUse)
+            {
+                tracker.MarkInUse();
+            }
+            else
+            {
+                tracker.MarkInactive();
             }
         }
 

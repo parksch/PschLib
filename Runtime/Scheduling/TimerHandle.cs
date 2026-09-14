@@ -88,6 +88,22 @@ namespace PschLib.Scheduling
             return false;
         }
 
+        internal void DiscardOverflow()
+        {
+            if (!IsRunning || Duration <= 0f)
+            {
+                return;
+            }
+
+            if (float.IsNaN(ElapsedTime) || float.IsInfinity(ElapsedTime))
+            {
+                ElapsedTime = 0f;
+                return;
+            }
+
+            ElapsedTime %= Duration;
+        }
+
         internal bool Complete()
         {
             if (!IsRunning)

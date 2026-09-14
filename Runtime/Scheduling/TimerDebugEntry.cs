@@ -5,6 +5,7 @@ namespace PschLib.Scheduling
     {
         public readonly TimerState State;
         public readonly TimerTimeMode TimeMode;
+        public readonly TimerOverflowMode OverflowMode;
         public readonly float Duration;
         public readonly float ElapsedTime;
         public readonly float RemainingTime;
@@ -14,10 +15,11 @@ namespace PschLib.Scheduling
         public readonly int CompletedCount;
         public readonly bool IsPending;
 
-        public TimerDebugEntry(TimerHandle handle, TimerTimeMode timeMode, bool isPending)
+        public TimerDebugEntry(TimerHandle handle, TimerTimeMode timeMode, TimerOverflowMode overflowMode, bool isPending)
         {
             State = handle.State;
             TimeMode = timeMode;
+            OverflowMode = overflowMode;
             Duration = handle.Duration;
             ElapsedTime = handle.ElapsedTime;
             RemainingTime = handle.RemainingTime;

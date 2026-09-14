@@ -4,12 +4,16 @@ namespace PschLib.Scheduling
 {
     internal sealed class TimerEntry
     {
+        private const int MaxCallbacksPerTick = 5;
+
         private readonly Action callback;
 
         public TimerHandle Handle { get; }
         public TimerTimeMode TimeMode { get; }
+        public TimerOverflowMode OverflowMode { get; }
 
-        internal TimerEntry(float duration, TimerTimeMode timeMode, Action callback, bool startPaused, bool repeat, int repeatCount)
+        internal TimerEntry(float duration, TimerTimeMode timeMode, Action callback, bool startPaused,
+            bool repeat, int repeatCount, TimerOverflowMode overflowMode)
         {
             if (float.IsNaN(duration) || float.IsInfinity(duration) || duration < 0f)
             {
@@ -31,7 +35,13 @@ namespace PschLib.Scheduling
                 throw new ArgumentOutOfRangeException(nameof(timeMode), "Unsupported timer time mode.");
             }
 
+            if (overflowMode != TimerOverflowMode.Discard && overflowMode != TimerOverflowMode.Preserve)
+            {
+                throw new ArgumentOutOfRangeException(nameof(overflowMode), "Unsupported timer overflow mode.");
+            }
+
             TimeMode = timeMode;
+            OverflowMode = overflowMode;
             this.callback = callback;
             Handle = new TimerHandle(duration, startPaused, repeat, repeatCount);
         }
@@ -59,15 +69,23 @@ namespace PschLib.Scheduling
 
             if (Handle.IsRepeating)
             {
-                while (Handle.IsRunning && Handle.ElapsedTime >= Handle.Duration)
+                var callbackCount = 0;
+
+                while (Handle.IsRunning && Handle.ElapsedTime >= Handle.Duration && callbackCount < MaxCallbacksPerTick)
                 {
                     var isComplete = Handle.FinishCycle();
+                    callbackCount++;
                     callback?.Invoke();
 
                     if (isComplete)
                     {
                         return true;
                     }
+                }
+
+                if (OverflowMode == TimerOverflowMode.Discard && Handle.IsRunning && Handle.ElapsedTime >= Handle.Duration)
+                {
+                    Handle.DiscardOverflow();
                 }
 
                 return Handle.IsFinished;

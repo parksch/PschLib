@@ -15,6 +15,7 @@ namespace PschLib.StateMachines
         private IState<TContext> currentState;
         private TState currentStateKey;
         private bool isStarted;
+        private LifecyclePhase lifecyclePhase;
 
         private bool hasPendingState;
         private TState pendingStateKey;
@@ -70,6 +71,8 @@ namespace PschLib.StateMachines
                 throw new InvalidOperationException("StateMachine is already started.");
             }
 
+            EnsureNotExecuting(nameof(Start));
+
             var state = GetRegisteredState(key);
 
             currentStateKey = key;
@@ -78,6 +81,7 @@ namespace PschLib.StateMachines
 
             try
             {
+                lifecyclePhase = LifecyclePhase.Entering;
                 currentState.Enter(context);
             }
             catch
@@ -85,19 +89,47 @@ namespace PschLib.StateMachines
                 ResetState();
                 throw;
             }
+            finally
+            {
+                lifecyclePhase = LifecyclePhase.None;
+            }
+
             NotifyDebugStateChanged();
         }
 
         public void Update()
         {
             EnsureStarted();
-            currentState.Update(context);
-            ProcessStateChangeRequest();
+            EnsureNotExecuting(nameof(Update));
+
+            lifecyclePhase = LifecyclePhase.Updating;
+
+            try
+            {
+                currentState.Update(context);
+            }
+            finally
+            {
+                lifecyclePhase = LifecyclePhase.None;
+            }
+
+            if (isStarted)
+            {
+                ProcessStateChangeRequest();
+            }
         }
 
         public void Stop()
         {
             EnsureStarted();
+
+            if (lifecyclePhase == LifecyclePhase.Entering || lifecyclePhase == LifecyclePhase.Exiting)
+            {
+                throw new InvalidOperationException($"StateMachine.Stop cannot be called while a state is {lifecyclePhase.ToString().ToLowerInvariant()}.");
+            }
+
+            var previousPhase = lifecyclePhase;
+            lifecyclePhase = LifecyclePhase.Exiting;
 
             try
             {
@@ -106,6 +138,7 @@ namespace PschLib.StateMachines
             finally
             {
                 ResetState();
+                lifecyclePhase = previousPhase;
                 NotifyDebugStateChanged();
             }
         }
@@ -144,6 +177,14 @@ namespace PschLib.StateMachines
             }
         }
 
+        private void EnsureNotExecuting(string operation)
+        {
+            if (lifecyclePhase != LifecyclePhase.None)
+            {
+                throw new InvalidOperationException($"StateMachine.{operation} cannot be called while a state is {lifecyclePhase.ToString().ToLowerInvariant()}.");
+            }
+        }
+
         private void ProcessStateChangeRequest()
         {
             if (!hasPendingState)
@@ -169,17 +210,23 @@ namespace PschLib.StateMachines
 
             try
             {
+                lifecyclePhase = LifecyclePhase.Exiting;
                 currentState.Exit(context);
 
                 currentStateKey = key;
                 currentState = nextState;
 
+                lifecyclePhase = LifecyclePhase.Entering;
                 currentState.Enter(context);
             }
             catch
             {
                 ResetState();
                 throw;
+            }
+            finally
+            {
+                lifecyclePhase = LifecyclePhase.None;
             }
 
             StateChanged?.Invoke(previousStateKey, key);
@@ -204,6 +251,14 @@ namespace PschLib.StateMachines
             }
 
             return state;
+        }
+
+        private enum LifecyclePhase
+        {
+            None,
+            Entering,
+            Updating,
+            Exiting
         }
 
         [System.Diagnostics.Conditional("UNITY_EDITOR")]
