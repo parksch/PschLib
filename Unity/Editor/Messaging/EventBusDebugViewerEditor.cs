@@ -1,35 +1,38 @@
 using System;
 using System.Collections.Generic;
+using PschLib.Messaging;
+using PschLib.Unity.Debugging;
+using PschLib.Unity.Messaging;
 using UnityEditor;
 using UnityEngine;
 
-namespace PschLib.Messaging
+namespace PschLib.Unity.Editor.Messaging
 {
-    public sealed class EventBusDebugWindow : EditorWindow
+    [CustomEditor(typeof(EventBusDebugViewer))]
+    public sealed class EventBusDebugViewerEditor
+        : DebugViewerEditorBase<EventBusDebugViewer, EventBusDebugViewer>
     {
         private readonly List<EventBus.DebugInfo> debugInfo = new List<EventBus.DebugInfo>();
         private readonly Dictionary<Type, bool> foldoutStates = new Dictionary<Type, bool>();
-        private Vector2 scrollPosition;
 
-        [MenuItem("Window/PschLib/Event Bus Debugger")]
-        private static void Open()
+        protected override string EmptyMessage => "The EventBus debug source is unavailable.";
+
+        protected override void Subscribe(EventBusDebugViewer viewer, Action callback)
         {
-            GetWindow<EventBusDebugWindow>("Event Bus Debugger");
+            viewer.DebugStateChanged += callback;
         }
 
-        private void OnEnable()
+        protected override void Unsubscribe(EventBusDebugViewer viewer, Action callback)
         {
-            EventBus.DebugListenersChanged += Repaint;
+            viewer.DebugStateChanged -= callback;
         }
 
-        private void OnDisable()
+        protected override void DrawDebugInfo(
+            MonoBehaviour component,
+            string fieldName,
+            EventBusDebugViewer viewer)
         {
-            EventBus.DebugListenersChanged -= Repaint;
-        }
-
-        private void OnGUI()
-        {
-            EventBus.GetDebugInfo(debugInfo);
+            viewer.GetDebugInfo(debugInfo);
 
             EditorGUILayout.LabelField("Active Listeners", debugInfo.Count.ToString(), EditorStyles.boldLabel);
             EditorGUILayout.Space();
@@ -39,8 +42,6 @@ namespace PschLib.Messaging
                 EditorGUILayout.HelpBox("There are no active EventBus listeners.", MessageType.Info);
                 return;
             }
-
-            scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
 
             var index = 0;
             while (index < debugInfo.Count)
@@ -56,8 +57,6 @@ namespace PschLib.Messaging
                 DrawEventGroup(eventType, index, endIndex);
                 index = endIndex;
             }
-
-            EditorGUILayout.EndScrollView();
         }
 
         private void DrawEventGroup(Type eventType, int startIndex, int endIndex)

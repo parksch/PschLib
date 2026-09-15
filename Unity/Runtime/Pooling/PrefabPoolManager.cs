@@ -29,6 +29,7 @@ namespace PschLib.Unity.Pooling
         public int Count => pools.Count;
 
 #if UNITY_EDITOR
+        private bool isNotifyingDebugStateChanged;
         public event Action DebugStateChanged;
 
         public readonly struct DebugEntry
@@ -388,8 +389,48 @@ namespace PschLib.Unity.Pooling
         private void NotifyDebugStateChanged()
         {
 #if UNITY_EDITOR
-            DebugStateChanged?.Invoke();
+            var listeners = DebugStateChanged;
+            if (listeners == null || isNotifyingDebugStateChanged)
+            {
+                return;
+            }
+
+            isNotifyingDebugStateChanged = true;
+
+            try
+            {
+                var invocationList = listeners.GetInvocationList();
+                for (var i = 0; i < invocationList.Length; i++)
+                {
+                    try
+                    {
+                        ((Action)invocationList[i])();
+                    }
+                    catch (Exception exception)
+                    {
+                        ReportDebugListenerException(exception);
+                    }
+                }
+            }
+            finally
+            {
+                isNotifyingDebugStateChanged = false;
+            }
 #endif
         }
+
+#if UNITY_EDITOR
+        private void ReportDebugListenerException(Exception exception)
+        {
+            try
+            {
+                Debug.LogException(exception, this);
+            }
+            catch (Exception)
+            {
+                // Debug reporting must not affect pool operations.
+            }
+        }
+#endif
     }
 }

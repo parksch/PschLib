@@ -10,6 +10,7 @@ namespace PschLib.Messaging
         private static long nextListenerId;
         private static int publishDepth;
 #if UNITY_EDITOR
+        private static bool isNotifyingDebugListeners;
         public static event Action DebugListenersChanged;
 #endif
 
@@ -212,9 +213,49 @@ namespace PschLib.Messaging
         private static void NotifyDebugListenersChanged()
         {
 #if UNITY_EDITOR
-            DebugListenersChanged?.Invoke();
+            var listeners = DebugListenersChanged;
+            if (listeners == null || isNotifyingDebugListeners)
+            {
+                return;
+            }
+
+            isNotifyingDebugListeners = true;
+
+            try
+            {
+                var invocationList = listeners.GetInvocationList();
+                for (var i = 0; i < invocationList.Length; i++)
+                {
+                    try
+                    {
+                        ((Action)invocationList[i])();
+                    }
+                    catch (Exception exception)
+                    {
+                        ReportDebugListenerException(exception);
+                    }
+                }
+            }
+            finally
+            {
+                isNotifyingDebugListeners = false;
+            }
 #endif
         }
+
+#if UNITY_EDITOR
+        private static void ReportDebugListenerException(Exception exception)
+        {
+            try
+            {
+                System.Diagnostics.Trace.TraceError($"EventBus debug listener failed: {exception}");
+            }
+            catch (Exception)
+            {
+                // Debug reporting must not affect event delivery.
+            }
+        }
+#endif
 
         private static void RemoveDisposed(List<Listener> listeners)
         {

@@ -16,6 +16,7 @@ namespace PschLib.Scheduling
         private bool clearRequested;
 
 #if UNITY_EDITOR
+        private bool isNotifyingDebugStateChanged;
         public event Action DebugStateChanged;
 #endif
 
@@ -164,9 +165,49 @@ namespace PschLib.Scheduling
         private void NotifyDebugStateChanged()
         {
 #if UNITY_EDITOR
-            DebugStateChanged?.Invoke();
+            var listeners = DebugStateChanged;
+            if (listeners == null || isNotifyingDebugStateChanged)
+            {
+                return;
+            }
+
+            isNotifyingDebugStateChanged = true;
+
+            try
+            {
+                var invocationList = listeners.GetInvocationList();
+                for (var i = 0; i < invocationList.Length; i++)
+                {
+                    try
+                    {
+                        ((Action)invocationList[i])();
+                    }
+                    catch (Exception exception)
+                    {
+                        ReportDebugListenerException(exception);
+                    }
+                }
+            }
+            finally
+            {
+                isNotifyingDebugStateChanged = false;
+            }
 #endif
         }
+
+#if UNITY_EDITOR
+        private static void ReportDebugListenerException(Exception exception)
+        {
+            try
+            {
+                System.Diagnostics.Trace.TraceError($"TimerScheduler debug listener failed: {exception}");
+            }
+            catch (Exception)
+            {
+                // Debug reporting must not affect timer processing.
+            }
+        }
+#endif
 
 #if UNITY_EDITOR
         int ITimerSchedulerDebugInfo.TimerCount => Count;

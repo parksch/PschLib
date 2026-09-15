@@ -72,8 +72,18 @@ namespace PschLib.Unity.Debugging
 
         private void FindDebugTargets(MonoBehaviour component)
         {
-            if (component == null || component is TViewer)
+            if (component == null)
             {
+                return;
+            }
+
+            if (component is TViewer)
+            {
+                if (component is TDebugInfo viewerDebugInfo)
+                {
+                    AddDebugTarget(component, string.Empty, viewerDebugInfo);
+                }
+
                 return;
             }
 
@@ -91,15 +101,20 @@ namespace PschLib.Unity.Debugging
                         continue;
                     }
 
-                    debugTargets.Add(new DebugTarget(component, fields[i].Name, debugInfo));
-
-                    if (!foundDebugInfos.Contains(debugInfo))
-                    {
-                        foundDebugInfos.Add(debugInfo);
-                    }
+                    AddDebugTarget(component, fields[i].Name, debugInfo);
                 }
 
                 type = type.BaseType;
+            }
+        }
+
+        private void AddDebugTarget(MonoBehaviour component, string fieldName, TDebugInfo debugInfo)
+        {
+            debugTargets.Add(new DebugTarget(component, fieldName, debugInfo));
+
+            if (!foundDebugInfos.Contains(debugInfo))
+            {
+                foundDebugInfos.Add(debugInfo);
             }
         }
 
