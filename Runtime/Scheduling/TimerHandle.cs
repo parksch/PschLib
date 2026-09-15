@@ -90,7 +90,7 @@ namespace PschLib.Scheduling
 
         internal void DiscardOverflow()
         {
-            if (!IsRunning || Duration <= 0f)
+            if (IsFinished || Duration <= 0f)
             {
                 return;
             }

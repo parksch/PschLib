@@ -30,7 +30,22 @@ namespace PschLib.Unity.Pooling
 
 #if UNITY_EDITOR
         private bool isNotifyingDebugStateChanged;
-        public event Action DebugStateChanged;
+        private Action debugStateChanged;
+        private Delegate[] debugListenerSnapshot = Array.Empty<Delegate>();
+
+        public event Action DebugStateChanged
+        {
+            add
+            {
+                debugStateChanged += value;
+                debugListenerSnapshot = debugStateChanged?.GetInvocationList() ?? Array.Empty<Delegate>();
+            }
+            remove
+            {
+                debugStateChanged -= value;
+                debugListenerSnapshot = debugStateChanged?.GetInvocationList() ?? Array.Empty<Delegate>();
+            }
+        }
 
         public readonly struct DebugEntry
         {
@@ -389,8 +404,8 @@ namespace PschLib.Unity.Pooling
         private void NotifyDebugStateChanged()
         {
 #if UNITY_EDITOR
-            var listeners = DebugStateChanged;
-            if (listeners == null || isNotifyingDebugStateChanged)
+            var listeners = debugListenerSnapshot;
+            if (listeners.Length == 0 || isNotifyingDebugStateChanged)
             {
                 return;
             }
@@ -399,16 +414,16 @@ namespace PschLib.Unity.Pooling
 
             try
             {
-                var invocationList = listeners.GetInvocationList();
-                for (var i = 0; i < invocationList.Length; i++)
+                for (var i = 0; i < listeners.Length; i++)
                 {
                     try
                     {
-                        ((Action)invocationList[i])();
+                        ((Action)listeners[i])();
                     }
                     catch (Exception exception)
                     {
-                        ReportDebugListenerException(exception);
+                        PschLib.Debugging.DebugObserverExceptionReporter.Report(
+                            nameof(PrefabPoolManager), exception, this);
                     }
                 }
             }
@@ -419,18 +434,5 @@ namespace PschLib.Unity.Pooling
 #endif
         }
 
-#if UNITY_EDITOR
-        private void ReportDebugListenerException(Exception exception)
-        {
-            try
-            {
-                Debug.LogException(exception, this);
-            }
-            catch (Exception)
-            {
-                // Debug reporting must not affect pool operations.
-            }
-        }
-#endif
     }
 }

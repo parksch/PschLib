@@ -17,10 +17,27 @@ namespace PschLib.Scheduling
 
 #if UNITY_EDITOR
         private bool isNotifyingDebugStateChanged;
-        public event Action DebugStateChanged;
+        private Action debugStateChanged;
+        private Delegate[] debugListenerSnapshot = Array.Empty<Delegate>();
+
+        public event Action DebugStateChanged
+        {
+            add
+            {
+                debugStateChanged += value;
+                debugListenerSnapshot = debugStateChanged?.GetInvocationList() ?? Array.Empty<Delegate>();
+            }
+            remove
+            {
+                debugStateChanged -= value;
+                debugListenerSnapshot = debugStateChanged?.GetInvocationList() ?? Array.Empty<Delegate>();
+            }
+        }
 #endif
 
-        public int Count => clearRequested ? pendingEntries.Count : entries.Count + pendingEntries.Count;
+        public int Count => clearRequested
+            ? CountActive(pendingEntries)
+            : CountActive(entries) + CountActive(pendingEntries);
 
         public TimerHandle Schedule(float duration, Action callback = null, TimerTimeMode timeMode = TimerTimeMode.Scaled, bool startPaused = false)
         {
@@ -67,7 +84,7 @@ namespace PschLib.Scheduling
 
             try
             {
-                for (var i = entries.Count - 1; i >= 0; i--)
+                for (var i = 0; i < entries.Count; i++)
                 {
                     if (clearRequested)
                     {
@@ -78,18 +95,10 @@ namespace PschLib.Scheduling
 
                     try
                     {
-                        if (entry.Tick(scaledDeltaTime, unscaledDeltaTime))
-                        {
-                            entries.RemoveAt(i);
-                        }
+                        entry.Tick(scaledDeltaTime, unscaledDeltaTime);
                     }
                     catch (Exception exception)
                     {
-                        if (entry.Handle.IsFinished)
-                        {
-                            entries.RemoveAt(i);
-                        }
-
                         if (failures == null)
                         {
                             failures = new List<Exception>();
@@ -108,6 +117,12 @@ namespace PschLib.Scheduling
                     entries.Clear();
                     clearRequested = false;
                 }
+                else
+                {
+                    RemoveFinished(entries);
+                }
+
+                RemoveFinished(pendingEntries);
 
                 if (pendingEntries.Count > 0)
                 {
@@ -153,6 +168,48 @@ namespace PschLib.Scheduling
             }
         }
 
+        private static void RemoveFinished(List<TimerEntry> targetEntries)
+        {
+            var activeCount = 0;
+
+            for (var i = 0; i < targetEntries.Count; i++)
+            {
+                var entry = targetEntries[i];
+
+                if (entry.Handle.IsFinished)
+                {
+                    continue;
+                }
+
+                if (activeCount != i)
+                {
+                    targetEntries[activeCount] = entry;
+                }
+
+                activeCount++;
+            }
+
+            if (activeCount < targetEntries.Count)
+            {
+                targetEntries.RemoveRange(activeCount, targetEntries.Count - activeCount);
+            }
+        }
+
+        private static int CountActive(List<TimerEntry> targetEntries)
+        {
+            var count = 0;
+
+            for (var i = 0; i < targetEntries.Count; i++)
+            {
+                if (!targetEntries[i].Handle.IsFinished)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
         private static void CancelEntries(List<TimerEntry> targetEntries)
         {
             for (int i = 0; i < targetEntries.Count; i++)
@@ -165,8 +222,8 @@ namespace PschLib.Scheduling
         private void NotifyDebugStateChanged()
         {
 #if UNITY_EDITOR
-            var listeners = DebugStateChanged;
-            if (listeners == null || isNotifyingDebugStateChanged)
+            var listeners = debugListenerSnapshot;
+            if (listeners.Length == 0 || isNotifyingDebugStateChanged)
             {
                 return;
             }
@@ -175,16 +232,15 @@ namespace PschLib.Scheduling
 
             try
             {
-                var invocationList = listeners.GetInvocationList();
-                for (var i = 0; i < invocationList.Length; i++)
+                for (var i = 0; i < listeners.Length; i++)
                 {
                     try
                     {
-                        ((Action)invocationList[i])();
+                        ((Action)listeners[i])();
                     }
                     catch (Exception exception)
                     {
-                        ReportDebugListenerException(exception);
+                        PschLib.Debugging.DebugObserverExceptionReporter.Report(nameof(TimerScheduler), exception);
                     }
                 }
             }
@@ -196,22 +252,8 @@ namespace PschLib.Scheduling
         }
 
 #if UNITY_EDITOR
-        private static void ReportDebugListenerException(Exception exception)
-        {
-            try
-            {
-                System.Diagnostics.Trace.TraceError($"TimerScheduler debug listener failed: {exception}");
-            }
-            catch (Exception)
-            {
-                // Debug reporting must not affect timer processing.
-            }
-        }
-#endif
-
-#if UNITY_EDITOR
         int ITimerSchedulerDebugInfo.TimerCount => Count;
-        int ITimerSchedulerDebugInfo.PendingTimerCount => pendingEntries.Count;
+        int ITimerSchedulerDebugInfo.PendingTimerCount => CountActive(pendingEntries);
         bool ITimerSchedulerDebugInfo.IsTicking => isTicking;
 
         void ITimerSchedulerDebugInfo.GetTimerEntries(List<TimerDebugEntry> results)
@@ -239,6 +281,12 @@ namespace PschLib.Scheduling
             for (var i = 0; i < source.Count; i++)
             {
                 var entry = source[i];
+
+                if (entry.Handle.IsFinished)
+                {
+                    continue;
+                }
+
                 results.Add(new TimerDebugEntry(entry.Handle, entry.TimeMode, entry.OverflowMode, isPending));
             }
         }

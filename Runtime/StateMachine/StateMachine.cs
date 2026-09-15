@@ -24,7 +24,22 @@ namespace PschLib.StateMachines
         public event Action<TState, TState> StateChanged;
 #if UNITY_EDITOR
         private bool isNotifyingDebugStateChanged;
-        public event Action DebugStateChanged;
+        private Action debugStateChanged;
+        private Delegate[] debugListenerSnapshot = Array.Empty<Delegate>();
+
+        public event Action DebugStateChanged
+        {
+            add
+            {
+                debugStateChanged += value;
+                debugListenerSnapshot = debugStateChanged?.GetInvocationList() ?? Array.Empty<Delegate>();
+            }
+            remove
+            {
+                debugStateChanged -= value;
+                debugListenerSnapshot = debugStateChanged?.GetInvocationList() ?? Array.Empty<Delegate>();
+            }
+        }
 #endif
 
         public TContext Context => context;
@@ -266,8 +281,8 @@ namespace PschLib.StateMachines
         private void NotifyDebugStateChanged()
         {
 #if UNITY_EDITOR
-            var listeners = DebugStateChanged;
-            if (listeners == null || isNotifyingDebugStateChanged)
+            var listeners = debugListenerSnapshot;
+            if (listeners.Length == 0 || isNotifyingDebugStateChanged)
             {
                 return;
             }
@@ -276,16 +291,15 @@ namespace PschLib.StateMachines
 
             try
             {
-                var invocationList = listeners.GetInvocationList();
-                for (var i = 0; i < invocationList.Length; i++)
+                for (var i = 0; i < listeners.Length; i++)
                 {
                     try
                     {
-                        ((Action)invocationList[i])();
+                        ((Action)listeners[i])();
                     }
                     catch (Exception exception)
                     {
-                        ReportDebugListenerException(exception);
+                        PschLib.Debugging.DebugObserverExceptionReporter.Report(nameof(StateMachine<TState, TContext>), exception);
                     }
                 }
             }
@@ -295,20 +309,6 @@ namespace PschLib.StateMachines
             }
 #endif
         }
-
-#if UNITY_EDITOR
-        private static void ReportDebugListenerException(Exception exception)
-        {
-            try
-            {
-                System.Diagnostics.Trace.TraceError($"StateMachine debug listener failed: {exception}");
-            }
-            catch (Exception)
-            {
-                // Debug reporting must not affect state transitions.
-            }
-        }
-#endif
 
 #if UNITY_EDITOR
         string IStateMachineDebugInfo.StateTypeName => typeof(TState).FullName ?? typeof(TState).Name;

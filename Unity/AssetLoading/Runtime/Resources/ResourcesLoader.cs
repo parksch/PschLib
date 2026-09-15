@@ -23,7 +23,22 @@ namespace PschLib.AssetLoading.Resources
 
 #if UNITY_EDITOR
         private bool isNotifyingDebugStateChanged;
-        public event Action DebugStateChanged;
+        private Action debugStateChanged;
+        private Delegate[] debugListenerSnapshot = Array.Empty<Delegate>();
+
+        public event Action DebugStateChanged
+        {
+            add
+            {
+                debugStateChanged += value;
+                debugListenerSnapshot = debugStateChanged?.GetInvocationList() ?? Array.Empty<Delegate>();
+            }
+            remove
+            {
+                debugStateChanged -= value;
+                debugListenerSnapshot = debugStateChanged?.GetInvocationList() ?? Array.Empty<Delegate>();
+            }
+        }
         public string LoaderName => nameof(ResourcesLoader);
         public int CachedAssetCount => cache.Count;
         public int ActiveAssetCount => cache.ActiveCount;
@@ -279,8 +294,8 @@ namespace PschLib.AssetLoading.Resources
         private void NotifyDebugStateChanged()
         {
 #if UNITY_EDITOR
-            var listeners = DebugStateChanged;
-            if (listeners == null || isNotifyingDebugStateChanged)
+            var listeners = debugListenerSnapshot;
+            if (listeners.Length == 0 || isNotifyingDebugStateChanged)
             {
                 return;
             }
@@ -289,16 +304,15 @@ namespace PschLib.AssetLoading.Resources
 
             try
             {
-                var invocationList = listeners.GetInvocationList();
-                for (var i = 0; i < invocationList.Length; i++)
+                for (var i = 0; i < listeners.Length; i++)
                 {
                     try
                     {
-                        ((Action)invocationList[i])();
+                        ((Action)listeners[i])();
                     }
                     catch (Exception exception)
                     {
-                        ReportDebugListenerException(exception);
+                        PschLib.Debugging.DebugObserverExceptionReporter.Report(nameof(ResourcesLoader), exception);
                     }
                 }
             }
@@ -308,20 +322,6 @@ namespace PschLib.AssetLoading.Resources
             }
 #endif
         }
-
-#if UNITY_EDITOR
-        private static void ReportDebugListenerException(Exception exception)
-        {
-            try
-            {
-                Debug.LogException(exception);
-            }
-            catch (Exception)
-            {
-                // Debug reporting must not affect asset loading.
-            }
-        }
-#endif
 
         private sealed class PendingLoad
         {

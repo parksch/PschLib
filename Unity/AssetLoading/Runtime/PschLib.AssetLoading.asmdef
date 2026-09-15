@@ -2,6 +2,7 @@
     "name": "PschLib.AssetLoading",
     "rootNamespace": "PschLib.AssetLoading",
     "references": [
+        "GUID:911c29e3ddec356429bef19ddd8ef81f",
         "UniTask"
     ],
     "includePlatforms": [],

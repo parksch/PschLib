@@ -46,16 +46,16 @@ namespace PschLib.Scheduling
             Handle = new TimerHandle(duration, startPaused, repeat, repeatCount);
         }
 
-        internal bool Tick(float scaledDeltaTime, float unscaledDeltaTime)
+        internal void Tick(float scaledDeltaTime, float unscaledDeltaTime)
         {
             if (Handle.IsFinished)
             {
-                return true;
+                return;
             }
 
             if (!Handle.IsRunning)
             {
-                return false;
+                return;
             }
 
             var deltaTime = TimeMode == TimerTimeMode.Scaled ? scaledDeltaTime : unscaledDeltaTime;
@@ -64,40 +64,46 @@ namespace PschLib.Scheduling
 
             if (Handle.ElapsedTime < Handle.Duration)
             {
-                return false;
+                return;
             }
 
             if (Handle.IsRepeating)
             {
                 var callbackCount = 0;
 
-                while (Handle.IsRunning && Handle.ElapsedTime >= Handle.Duration && callbackCount < MaxCallbacksPerTick)
+                try
                 {
-                    var isComplete = Handle.FinishCycle();
-                    callbackCount++;
-                    callback?.Invoke();
-
-                    if (isComplete)
+                    while (Handle.IsRunning && Handle.ElapsedTime >= Handle.Duration &&
+                        callbackCount < MaxCallbacksPerTick)
                     {
-                        return true;
+                        var isComplete = Handle.FinishCycle();
+                        callbackCount++;
+                        callback?.Invoke();
+
+                        if (isComplete)
+                        {
+                            return;
+                        }
+                    }
+
+                    return;
+                }
+                finally
+                {
+                    if (OverflowMode == TimerOverflowMode.Discard && !Handle.IsFinished &&
+                        Handle.ElapsedTime >= Handle.Duration)
+                    {
+                        Handle.DiscardOverflow();
                     }
                 }
-
-                if (OverflowMode == TimerOverflowMode.Discard && Handle.IsRunning && Handle.ElapsedTime >= Handle.Duration)
-                {
-                    Handle.DiscardOverflow();
-                }
-
-                return Handle.IsFinished;
             }
 
             if (!Handle.Complete())
             {
-                return Handle.IsFinished;
+                return;
             }
 
             callback?.Invoke();
-            return true;
         }
     }
 }

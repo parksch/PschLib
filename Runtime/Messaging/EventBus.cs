@@ -7,11 +7,27 @@ namespace PschLib.Messaging
     {
         private static readonly Dictionary<Type, List<Listener>> listenersByType = new Dictionary<Type, List<Listener>>();
         private static readonly List<Listener> pendingListeners = new List<Listener>();
+        private static readonly List<Type> emptyEventTypes = new List<Type>();
         private static long nextListenerId;
         private static int publishDepth;
 #if UNITY_EDITOR
         private static bool isNotifyingDebugListeners;
-        public static event Action DebugListenersChanged;
+        private static Action debugListenersChanged;
+        private static Delegate[] debugListenerSnapshot = Array.Empty<Delegate>();
+
+        public static event Action DebugListenersChanged
+        {
+            add
+            {
+                debugListenersChanged += value;
+                debugListenerSnapshot = debugListenersChanged?.GetInvocationList() ?? Array.Empty<Delegate>();
+            }
+            remove
+            {
+                debugListenersChanged -= value;
+                debugListenerSnapshot = debugListenersChanged?.GetInvocationList() ?? Array.Empty<Delegate>();
+            }
+        }
 #endif
 
         public static IDisposable Subscribe<TEvent>(Action<TEvent> handler) where TEvent : struct
@@ -186,11 +202,24 @@ namespace PschLib.Messaging
         private static void ApplyPendingChanges()
         {
             var hasPendingListeners = pendingListeners.Count > 0;
+            emptyEventTypes.Clear();
 
             foreach (var pair in listenersByType)
             {
                 RemoveDisposed(pair.Value);
+
+                if (pair.Value.Count == 0)
+                {
+                    emptyEventTypes.Add(pair.Key);
+                }
             }
+
+            for (var i = 0; i < emptyEventTypes.Count; i++)
+            {
+                listenersByType.Remove(emptyEventTypes[i]);
+            }
+
+            emptyEventTypes.Clear();
 
             for (var i = 0; i < pendingListeners.Count; i++)
             {
@@ -213,8 +242,8 @@ namespace PschLib.Messaging
         private static void NotifyDebugListenersChanged()
         {
 #if UNITY_EDITOR
-            var listeners = DebugListenersChanged;
-            if (listeners == null || isNotifyingDebugListeners)
+            var listeners = debugListenerSnapshot;
+            if (listeners.Length == 0 || isNotifyingDebugListeners)
             {
                 return;
             }
@@ -223,16 +252,15 @@ namespace PschLib.Messaging
 
             try
             {
-                var invocationList = listeners.GetInvocationList();
-                for (var i = 0; i < invocationList.Length; i++)
+                for (var i = 0; i < listeners.Length; i++)
                 {
                     try
                     {
-                        ((Action)invocationList[i])();
+                        ((Action)listeners[i])();
                     }
                     catch (Exception exception)
                     {
-                        ReportDebugListenerException(exception);
+                        PschLib.Debugging.DebugObserverExceptionReporter.Report(nameof(EventBus), exception);
                     }
                 }
             }
@@ -243,28 +271,30 @@ namespace PschLib.Messaging
 #endif
         }
 
-#if UNITY_EDITOR
-        private static void ReportDebugListenerException(Exception exception)
-        {
-            try
-            {
-                System.Diagnostics.Trace.TraceError($"EventBus debug listener failed: {exception}");
-            }
-            catch (Exception)
-            {
-                // Debug reporting must not affect event delivery.
-            }
-        }
-#endif
-
         private static void RemoveDisposed(List<Listener> listeners)
         {
-            for (var i = listeners.Count - 1; i >= 0; i--)
+            var activeCount = 0;
+
+            for (var i = 0; i < listeners.Count; i++)
             {
-                if (listeners[i].IsDisposed)
+                var listener = listeners[i];
+
+                if (listener.IsDisposed)
                 {
-                    listeners.RemoveAt(i);
+                    continue;
                 }
+
+                if (activeCount != i)
+                {
+                    listeners[activeCount] = listener;
+                }
+
+                activeCount++;
+            }
+
+            if (activeCount < listeners.Count)
+            {
+                listeners.RemoveRange(activeCount, listeners.Count - activeCount);
             }
         }
 
