@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.ExceptionServices;
 
 namespace PschLib.StateMachines
 {
@@ -21,7 +22,22 @@ namespace PschLib.StateMachines
         private TState pendingStateKey;
         private int pendingPriority;
 
-        public event Action<TState, TState> StateChanged;
+        private Action<TState, TState> stateChanged;
+        private Delegate[] stateChangedSnapshot = Array.Empty<Delegate>();
+
+        public event Action<TState, TState> StateChanged
+        {
+            add
+            {
+                stateChanged += value;
+                stateChangedSnapshot = stateChanged?.GetInvocationList() ?? Array.Empty<Delegate>();
+            }
+            remove
+            {
+                stateChanged -= value;
+                stateChangedSnapshot = stateChanged?.GetInvocationList() ?? Array.Empty<Delegate>();
+            }
+        }
 #if UNITY_EDITOR
         private bool isNotifyingDebugStateChanged;
         private Action debugStateChanged;
@@ -66,6 +82,8 @@ namespace PschLib.StateMachines
 
         public void Register(TState key, IState<TContext> state)
         {
+            EnsureNotDebugNotification(nameof(Register));
+
             if (ReferenceEquals(state, null))
             {
                 throw new ArgumentNullException(nameof(state));
@@ -82,6 +100,8 @@ namespace PschLib.StateMachines
 
         public void Start(TState key)
         {
+            EnsureNotDebugNotification(nameof(Start));
+
             if (isStarted)
             {
                 throw new InvalidOperationException("StateMachine is already started.");
@@ -115,6 +135,7 @@ namespace PschLib.StateMachines
 
         public void Update()
         {
+            EnsureNotDebugNotification(nameof(Update));
             EnsureStarted();
             EnsureNotExecuting(nameof(Update));
 
@@ -137,9 +158,10 @@ namespace PschLib.StateMachines
 
         public void Stop()
         {
+            EnsureNotDebugNotification(nameof(Stop));
             EnsureStarted();
 
-            if (lifecyclePhase == LifecyclePhase.Entering || lifecyclePhase == LifecyclePhase.Exiting)
+            if (lifecyclePhase != LifecyclePhase.None && lifecyclePhase != LifecyclePhase.Updating)
             {
                 throw new InvalidOperationException($"StateMachine.Stop cannot be called while a state is {lifecyclePhase.ToString().ToLowerInvariant()}.");
             }
@@ -166,6 +188,7 @@ namespace PschLib.StateMachines
 
         public bool ChangeState(TState key, int priority)
         {
+            EnsureNotDebugNotification(nameof(ChangeState));
             EnsureStarted();
             GetRegisteredState(key);
 
@@ -199,6 +222,17 @@ namespace PschLib.StateMachines
             {
                 throw new InvalidOperationException($"StateMachine.{operation} cannot be called while a state is {lifecyclePhase.ToString().ToLowerInvariant()}.");
             }
+        }
+
+        [System.Diagnostics.Conditional("UNITY_EDITOR")]
+        private void EnsureNotDebugNotification(string operation)
+        {
+#if UNITY_EDITOR
+            if (isNotifyingDebugStateChanged)
+            {
+                throw new InvalidOperationException($"StateMachine.{operation} cannot be called from a debug observer.");
+            }
+#endif
         }
 
         private void ProcessStateChangeRequest()
@@ -245,8 +279,52 @@ namespace PschLib.StateMachines
                 lifecyclePhase = LifecyclePhase.None;
             }
 
-            StateChanged?.Invoke(previousStateKey, key);
-            NotifyDebugStateChanged();
+            NotifyStateChanged(previousStateKey, key);
+        }
+
+        private void NotifyStateChanged(TState previousStateKey, TState currentStateKey)
+        {
+            var listeners = stateChangedSnapshot;
+            List<Exception> failures = null;
+            var previousPhase = lifecyclePhase;
+            lifecyclePhase = LifecyclePhase.Notifying;
+
+            try
+            {
+                for (var i = 0; i < listeners.Length; i++)
+                {
+                    try
+                    {
+                        ((Action<TState, TState>)listeners[i])(previousStateKey, currentStateKey);
+                    }
+                    catch (Exception exception)
+                    {
+                        if (failures == null)
+                        {
+                            failures = new List<Exception>();
+                        }
+
+                        failures.Add(exception);
+                    }
+                }
+            }
+            finally
+            {
+                lifecyclePhase = previousPhase;
+                NotifyDebugStateChanged();
+            }
+
+            if (failures == null)
+            {
+                return;
+            }
+
+            if (failures.Count == 1)
+            {
+                ExceptionDispatchInfo.Capture(failures[0]).Throw();
+            }
+
+            throw new AggregateException("StateChanged listeners failed.", failures);
         }
 
         private void ResetState()
@@ -274,7 +352,8 @@ namespace PschLib.StateMachines
             None,
             Entering,
             Updating,
-            Exiting
+            Exiting,
+            Notifying
         }
 
         [System.Diagnostics.Conditional("UNITY_EDITOR")]

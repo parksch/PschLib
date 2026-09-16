@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.ExceptionServices;
 
 namespace PschLib.Messaging
 {
@@ -64,6 +65,7 @@ namespace PschLib.Messaging
             }
 
             publishDepth++;
+            List<Exception> failures = null;
 
             try
             {
@@ -73,7 +75,19 @@ namespace PschLib.Messaging
                     var listener = listeners[i];
                     if (!listener.IsDisposed)
                     {
-                        ((Action<TEvent>)listener.Handler)(eventData);
+                        try
+                        {
+                            ((Action<TEvent>)listener.Handler)(eventData);
+                        }
+                        catch (Exception exception)
+                        {
+                            if (failures == null)
+                            {
+                                failures = new List<Exception>();
+                            }
+
+                            failures.Add(exception);
+                        }
                     }
                 }
             }
@@ -85,6 +99,18 @@ namespace PschLib.Messaging
                     ApplyPendingChanges();
                 }
             }
+
+            if (failures == null)
+            {
+                return;
+            }
+
+            if (failures.Count == 1)
+            {
+                ExceptionDispatchInfo.Capture(failures[0]).Throw();
+            }
+
+            throw new AggregateException("EventBus handlers failed.", failures);
         }
 
         public static void Clear()
