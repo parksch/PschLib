@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.ExceptionServices;
 #if UNITY_EDITOR
 using PschLib.AssetLoading.Debugging;
 #endif
@@ -175,12 +176,56 @@ namespace PschLib.AssetLoading.Addressables.Internal
 
         public void Clear()
         {
+            if (entries.Count == 0)
+            {
+                return;
+            }
+
+            var handles = new List<AsyncOperationHandle>(entries.Count);
+
             foreach (var entry in entries.Values)
             {
-                ReleaseHandle(entry.Handle);
+                handles.Add(entry.Handle);
             }
 
             entries.Clear();
+
+            List<Exception> exceptions = null;
+
+            for (var i = 0; i < handles.Count; i++)
+            {
+                try
+                {
+                    ReleaseHandle(handles[i]);
+                }
+                catch (Exception exception)
+                {
+                    if (exceptions == null)
+                    {
+                        exceptions = new List<Exception>();
+                    }
+
+                    exceptions.Add(exception);
+                }
+            }
+
+            ThrowClearExceptions(exceptions);
+        }
+
+        private static void ThrowClearExceptions(List<Exception> exceptions)
+        {
+            if (exceptions == null)
+            {
+                return;
+            }
+
+            if (exceptions.Count == 1)
+            {
+                ExceptionDispatchInfo.Capture(exceptions[0]).Throw();
+                return;
+            }
+
+            throw new AggregateException("Multiple Addressables handles failed to release while clearing the cache.", exceptions);
         }
 
 #if UNITY_EDITOR

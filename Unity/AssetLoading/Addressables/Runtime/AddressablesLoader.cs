@@ -81,8 +81,9 @@ namespace PschLib.AssetLoading.Addressables
             {
                 pendingLoad = new PendingLoad();
                 pendingLoads.Add(key, pendingLoad);
+                var loadGeneration = generation;
                 NotifyDebugStateChanged();
-                LoadPendingAsync<TAsset>(address, key, pendingLoad, generation).Forget();
+                LoadPendingAsync<TAsset>(address, key, pendingLoad, loadGeneration).Forget();
             }
 
             var loadedAsset = cancellationToken.CanBeCanceled
@@ -107,23 +108,29 @@ namespace PschLib.AssetLoading.Addressables
             PendingLoad pendingLoad, int generation) where TAsset : Object
         {
             AsyncOperationHandle<TAsset> handle = default;
+            var loadOperationCompleted = false;
+            var ownsHandle = false;
 
             try
             {
                 handle = UnityAddressables.LoadAssetAsync<TAsset>(address);
+                ownsHandle = true;
                 var asset = await handle.ToUniTask();
+                loadOperationCompleted = true;
 
-                if (handle.Status != AsyncOperationStatus.Succeeded || asset == null)
+                if (generation != this.generation)
                 {
-                    Debug.LogError($"Addressable asset load failed: {address} ({typeof(TAsset).Name})");
+                    ownsHandle = false;
                     ReleaseHandle(handle);
                     RemovePending(key, pendingLoad);
                     pendingLoad.TrySetResult(null);
                     return;
                 }
 
-                if (generation != this.generation)
+                if (handle.Status != AsyncOperationStatus.Succeeded || asset == null)
                 {
+                    ownsHandle = false;
+                    Debug.LogError($"Addressable asset load failed: {address} ({typeof(TAsset).Name})");
                     ReleaseHandle(handle);
                     RemovePending(key, pendingLoad);
                     pendingLoad.TrySetResult(null);
@@ -133,10 +140,12 @@ namespace PschLib.AssetLoading.Addressables
                 if (!cache.TryGet<TAsset>(address, out var cachedAsset))
                 {
                     cache.AddUnused(address, asset, handle);
+                    ownsHandle = false;
                     cachedAsset = asset;
                 }
                 else
                 {
+                    ownsHandle = false;
                     ReleaseHandle(handle);
                 }
 
@@ -145,10 +154,46 @@ namespace PschLib.AssetLoading.Addressables
             }
             catch (Exception exception)
             {
-                ReleaseHandle(handle);
+                var failure = exception;
+                var handleCleanupFailed = false;
+
+                if (ownsHandle)
+                {
+                    try
+                    {
+                        ReleaseHandle(handle);
+                    }
+                    catch (Exception releaseException)
+                    {
+                        handleCleanupFailed = true;
+                        failure = new AggregateException(
+                            "Addressable asset loading failed and its handle could not be released.",
+                            exception,
+                            releaseException);
+                    }
+                }
+
                 RemovePending(key, pendingLoad);
-                Debug.LogError($"Addressable asset load failed: {address} ({typeof(TAsset).Name})\n{exception.Message}");
-                pendingLoad.TrySetResult(null);
+
+                if (generation != this.generation)
+                {
+                    if (loadOperationCompleted || handleCleanupFailed)
+                    {
+                        Debug.LogError($"Addressable asset cleanup failed after the load was invalidated: {address} ({typeof(TAsset).Name})\n{failure}");
+                    }
+
+                    pendingLoad.TrySetResult(null);
+                    return;
+                }
+
+                if (!loadOperationCompleted)
+                {
+                    Debug.LogError($"Addressable asset load failed: {address} ({typeof(TAsset).Name})\n{failure}");
+                    pendingLoad.TrySetResult(null);
+                    return;
+                }
+
+                pendingLoad.TrySetException(failure);
             }
             finally
             {
@@ -234,9 +279,23 @@ namespace PschLib.AssetLoading.Addressables
             }
 
             generation++;
-            pendingLoads.Clear();
-            cache.Clear();
-            NotifyDebugStateChanged();
+            var invalidatedLoads = DetachPendingLoads();
+            try
+            {
+                cache.Clear();
+            }
+            finally
+            {
+                if (invalidatedLoads != null)
+                {
+                    for (var i = 0; i < invalidatedLoads.Count; i++)
+                    {
+                        invalidatedLoads[i].TrySetResult(null);
+                    }
+                }
+
+                NotifyDebugStateChanged();
+            }
         }
 
         private void RemovePending(AddressableAssetKey key, PendingLoad pendingLoad)
@@ -248,6 +307,18 @@ namespace PschLib.AssetLoading.Addressables
 
             pendingLoads.Remove(key);
             NotifyDebugStateChanged();
+        }
+
+        private List<PendingLoad> DetachPendingLoads()
+        {
+            if (pendingLoads.Count == 0)
+            {
+                return null;
+            }
+
+            var detachedLoads = new List<PendingLoad>(pendingLoads.Values);
+            pendingLoads.Clear();
+            return detachedLoads;
         }
 
         private static void ReleaseHandle(AsyncOperationHandle handle)
@@ -317,6 +388,11 @@ namespace PschLib.AssetLoading.Addressables
             public bool TrySetResult(Object asset)
             {
                 return completionSource.TrySetResult(asset);
+            }
+
+            public bool TrySetException(Exception exception)
+            {
+                return completionSource.TrySetException(exception);
             }
         }
     }

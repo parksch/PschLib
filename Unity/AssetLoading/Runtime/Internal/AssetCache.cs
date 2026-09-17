@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.ExceptionServices;
 #if UNITY_EDITOR
 using PschLib.AssetLoading.Debugging;
 #endif
@@ -190,12 +191,56 @@ namespace PschLib.AssetLoading.Internal
                 throw new ArgumentNullException(nameof(unload));
             }
 
+            if (entries.Count == 0)
+            {
+                return;
+            }
+
+            var assets = new List<Object>(entries.Count);
+
             foreach (var entry in entries.Values)
             {
-                unload(entry.Asset);
+                assets.Add(entry.Asset);
             }
 
             entries.Clear();
+
+            List<Exception> exceptions = null;
+
+            for (var i = 0; i < assets.Count; i++)
+            {
+                try
+                {
+                    unload(assets[i]);
+                }
+                catch (Exception exception)
+                {
+                    if (exceptions == null)
+                    {
+                        exceptions = new List<Exception>();
+                    }
+
+                    exceptions.Add(exception);
+                }
+            }
+
+            ThrowClearExceptions(exceptions);
+        }
+
+        private static void ThrowClearExceptions(List<Exception> exceptions)
+        {
+            if (exceptions == null)
+            {
+                return;
+            }
+
+            if (exceptions.Count == 1)
+            {
+                ExceptionDispatchInfo.Capture(exceptions[0]).Throw();
+                return;
+            }
+
+            throw new AggregateException("Multiple resource assets failed to unload while clearing the cache.", exceptions);
         }
 
 #if UNITY_EDITOR

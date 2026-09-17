@@ -101,8 +101,9 @@ namespace PschLib.AssetLoading.Resources
             {
                 pendingLoad = new PendingLoad();
                 pendingLoads.Add(key, pendingLoad);
+                var loadGeneration = generation;
                 NotifyDebugStateChanged();
-                LoadPendingAsync<TAsset>(path, key, pendingLoad, generation).Forget();
+                LoadPendingAsync<TAsset>(path, key, pendingLoad, loadGeneration).Forget();
             }
 
             var loadedAsset = cancellationToken.CanBeCanceled
@@ -205,9 +206,23 @@ namespace PschLib.AssetLoading.Resources
             }
 
             generation++;
-            pendingLoads.Clear();
-            cache.Clear(UnloadAsset);
-            NotifyDebugStateChanged();
+            var invalidatedLoads = DetachPendingLoads();
+            try
+            {
+                cache.Clear(UnloadAsset);
+            }
+            finally
+            {
+                if (invalidatedLoads != null)
+                {
+                    for (var i = 0; i < invalidatedLoads.Count; i++)
+                    {
+                        invalidatedLoads[i].TrySetResult(null);
+                    }
+                }
+
+                NotifyDebugStateChanged();
+            }
         }
 
         private async UniTask LoadPendingAsync<TAsset>(string path, AssetKey key, PendingLoad pendingLoad, int generation) where TAsset : Object
@@ -218,16 +233,16 @@ namespace PschLib.AssetLoading.Resources
                 var loadedAsset = await request.ToUniTask();
                 var asset = loadedAsset as TAsset;
 
-                if (asset == null)
+                if (generation != this.generation)
                 {
-                    Debug.LogError($"Resource asset was not found: {path} ({typeof(TAsset).Name})");
                     RemovePending(key, pendingLoad);
                     pendingLoad.TrySetResult(null);
                     return;
                 }
 
-                if (generation != this.generation)
+                if (asset == null)
                 {
+                    Debug.LogError($"Resource asset was not found: {path} ({typeof(TAsset).Name})");
                     RemovePending(key, pendingLoad);
                     pendingLoad.TrySetResult(null);
                     return;
@@ -262,6 +277,18 @@ namespace PschLib.AssetLoading.Resources
 
             pendingLoads.Remove(key);
             NotifyDebugStateChanged();
+        }
+
+        private List<PendingLoad> DetachPendingLoads()
+        {
+            if (pendingLoads.Count == 0)
+            {
+                return null;
+            }
+
+            var detachedLoads = new List<PendingLoad>(pendingLoads.Values);
+            pendingLoads.Clear();
+            return detachedLoads;
         }
 
         private static void UnloadAsset(Object asset)

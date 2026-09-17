@@ -119,10 +119,27 @@ namespace PschLib.Unity.Pooling
                 return false;
             }
 
-            for (int i = 0; i < settings.Count; i++)
+            var registeredKeys = new List<string>(settings.Count);
+
+            try
             {
-                PrefabPoolSetting setting = settings[i];
-                Register(setting.Key, setting.Prefab, setting.InitialCapacity, setting.MaxInactiveCount);
+                for (int i = 0; i < settings.Count; i++)
+                {
+                    PrefabPoolSetting setting = settings[i];
+
+                    if (!Register(setting.Key, setting.Prefab, setting.InitialCapacity, setting.MaxInactiveCount))
+                    {
+                        RollbackRegisteredPools(registeredKeys);
+                        return false;
+                    }
+
+                    registeredKeys.Add(setting.Key);
+                }
+            }
+            catch
+            {
+                RollbackRegisteredPools(registeredKeys);
+                throw;
             }
 
             isInitialized = true;
@@ -158,13 +175,28 @@ namespace PschLib.Unity.Pooling
                 return false;
             }
 
-            var storageObject = new GameObject($"{key} Pool");
-            storageObject.transform.SetParent(transform, false);
-            storageObject.SetActive(false);
+            GameObject storageObject = null;
 
-            var pool = new PrefabPool(prefab, storageObject.transform, this, maxInactiveCount);
-            pool.Prewarm(initialCapacity);
-            pools.Add(key, pool);
+            try
+            {
+                storageObject = new GameObject($"{key} Pool");
+                storageObject.transform.SetParent(transform, false);
+                storageObject.SetActive(false);
+
+                var pool = new PrefabPool(prefab, storageObject.transform, this, maxInactiveCount);
+                pool.Prewarm(initialCapacity);
+                pools.Add(key, pool);
+            }
+            catch
+            {
+                if (storageObject != null)
+                {
+                    Destroy(storageObject);
+                }
+
+                throw;
+            }
+
             NotifyDebugStateChanged();
             return true;
         }
@@ -341,6 +373,30 @@ namespace PschLib.Unity.Pooling
             }
 
             return true;
+        }
+
+        private void RollbackRegisteredPools(List<string> registeredKeys)
+        {
+            if (registeredKeys.Count == 0)
+            {
+                return;
+            }
+
+            for (var i = registeredKeys.Count - 1; i >= 0; i--)
+            {
+                var key = registeredKeys[i];
+
+                if (!pools.TryGetValue(key, out var pool))
+                {
+                    continue;
+                }
+
+                pool.Clear();
+                pool.DestroyStorageParent();
+                pools.Remove(key);
+            }
+
+            NotifyDebugStateChanged();
         }
 
         private void RemoveDestroyedInstanceReferences()
