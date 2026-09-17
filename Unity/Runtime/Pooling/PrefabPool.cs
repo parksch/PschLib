@@ -15,6 +15,7 @@ namespace PschLib.Unity.Pooling
         private readonly Queue<GameObject> inactiveObjects = new Queue<GameObject>();
         private readonly HashSet<GameObject> inUseObjects = new HashSet<GameObject>();
         private readonly Dictionary<GameObject, PooledObjectTracker> trackers = new Dictionary<GameObject, PooledObjectTracker>();
+        private readonly List<GameObject> destroyedTrackedObjects = new List<GameObject>();
 
         public int InUseCount => inUseObjects.Count;
         public int InactiveCount => inactiveObjects.Count;
@@ -30,6 +31,7 @@ namespace PschLib.Unity.Pooling
         internal void RemoveDestroyedInUseReferences()
         {
             inUseObjects.RemoveWhere(instance => instance == null);
+            RemoveDestroyedTrackerReferences();
         }
 
         internal void DestroyStorageParent()
@@ -169,8 +171,7 @@ namespace PschLib.Unity.Pooling
 
                 if (inactiveObjects.Count >= maxInactiveCount)
                 {
-                    tracker?.MarkExpectedDestroy();
-                    UnityEngine.Object.Destroy(instance);
+                    DestroyTrackedInstance(instance, tracker);
                     return true;
                 }
             }
@@ -194,14 +195,12 @@ namespace PschLib.Unity.Pooling
 
                 if (instance != null)
                 {
-                    if (trackers.TryGetValue(instance, out var tracker))
-                    {
-                        tracker?.MarkExpectedDestroy();
-                    }
-
-                    UnityEngine.Object.Destroy(instance);
+                    trackers.TryGetValue(instance, out var tracker);
+                    DestroyTrackedInstance(instance, tracker);
                 }
             }
+
+            RemoveDestroyedTrackerReferences();
         }
 
         internal void RemoveTrackedObject(GameObject instance)
@@ -223,7 +222,7 @@ namespace PschLib.Unity.Pooling
 
         private void RemoveDestroyedObjects()
         {
-            RemoveDestroyedInUseReferences();
+            inUseObjects.RemoveWhere(instance => instance == null);
             RemoveDestroyedInactiveObjects();
         }
 
@@ -240,6 +239,8 @@ namespace PschLib.Unity.Pooling
                     inactiveObjects.Enqueue(instance);
                 }
             }
+
+            RemoveDestroyedTrackerReferences();
         }
 
         private void TrackInstance(GameObject instance, bool inUse)
@@ -253,7 +254,13 @@ namespace PschLib.Unity.Pooling
 
             if (tracker == null)
             {
-                tracker = instance.AddComponent<PooledObjectTracker>();
+                tracker = instance.GetComponent<PooledObjectTracker>();
+
+                if (tracker == null)
+                {
+                    tracker = instance.AddComponent<PooledObjectTracker>();
+                }
+
                 trackers[instance] = tracker;
                 tracker.Initialize(owner, this);
             }
@@ -266,6 +273,33 @@ namespace PschLib.Unity.Pooling
             {
                 tracker.MarkInactive();
             }
+        }
+
+        private void DestroyTrackedInstance(GameObject instance, PooledObjectTracker tracker)
+        {
+            tracker?.MarkExpectedDestroy();
+            trackers.Remove(instance);
+            UnityEngine.Object.Destroy(instance);
+        }
+
+        private void RemoveDestroyedTrackerReferences()
+        {
+            destroyedTrackedObjects.Clear();
+
+            foreach (var pair in trackers)
+            {
+                if (pair.Key == null || pair.Value == null)
+                {
+                    destroyedTrackedObjects.Add(pair.Key);
+                }
+            }
+
+            for (int i = 0; i < destroyedTrackedObjects.Count; i++)
+            {
+                trackers.Remove(destroyedTrackedObjects[i]);
+            }
+
+            destroyedTrackedObjects.Clear();
         }
 
         private void ValidateStorageParent()

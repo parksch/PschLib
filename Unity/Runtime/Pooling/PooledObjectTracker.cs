@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace PschLib.Unity.Pooling
 {
@@ -11,7 +10,6 @@ namespace PschLib.Unity.Pooling
         private PrefabPool pool;
         private PooledObjectState state;
         private bool expectedDestroy;
-        private Scene scene;
 
         internal void Initialize(PrefabPoolManager owner, PrefabPool pool)
         {
@@ -24,13 +22,11 @@ namespace PschLib.Unity.Pooling
         {
             state = PooledObjectState.InUse;
             expectedDestroy = false;
-            scene = gameObject.scene;
         }
 
         internal void MarkInactive()
         {
             state = PooledObjectState.Inactive;
-            scene = gameObject.scene;
         }
 
         internal void MarkExpectedDestroy()
@@ -42,7 +38,7 @@ namespace PschLib.Unity.Pooling
         {
             if (owner != null && pool != null)
             {
-                owner.NotifyTrackedObjectDestroyed(gameObject, pool, state, expectedDestroy, scene);
+                owner.NotifyTrackedObjectDestroyed(gameObject, pool, state, expectedDestroy, gameObject.scene);
             }
         }
     }

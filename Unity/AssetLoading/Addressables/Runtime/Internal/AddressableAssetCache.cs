@@ -154,6 +154,7 @@ namespace PschLib.AssetLoading.Addressables.Internal
         public int ClearUnused()
         {
             var unusedKeys = new List<AddressableAssetKey>();
+            var unusedHandles = new List<AsyncOperationHandle>();
 
             foreach (var pair in entries)
             {
@@ -168,10 +169,30 @@ namespace PschLib.AssetLoading.Addressables.Internal
                 var key = unusedKeys[i];
                 var handle = entries[key].Handle;
                 entries.Remove(key);
-                ReleaseHandle(handle);
+                unusedHandles.Add(handle);
             }
 
-            return unusedKeys.Count;
+            List<Exception> exceptions = null;
+
+            for (var i = 0; i < unusedHandles.Count; i++)
+            {
+                try
+                {
+                    ReleaseHandle(unusedHandles[i]);
+                }
+                catch (Exception exception)
+                {
+                    if (exceptions == null)
+                    {
+                        exceptions = new List<Exception>();
+                    }
+
+                    exceptions.Add(exception);
+                }
+            }
+
+            ThrowClearExceptions(exceptions);
+            return unusedHandles.Count;
         }
 
         public void Clear()

@@ -186,9 +186,11 @@ namespace PschLib.AssetLoading.Resources
         public void ClearUnused()
         {
             ValidateMainThread();
-            var unloadedCount = cache.ClearUnused(key => !pendingLoads.ContainsKey(key), UnloadAsset);
-
-            if (unloadedCount > 0)
+            try
+            {
+                cache.ClearUnused(key => !pendingLoads.ContainsKey(key), UnloadAsset);
+            }
+            finally
             {
                 NotifyDebugStateChanged();
             }

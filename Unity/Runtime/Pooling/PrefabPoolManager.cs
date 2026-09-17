@@ -1,8 +1,8 @@
 using System;
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-using System.Collections;
-#endif
 using System.Collections.Generic;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+using System.Threading;
+#endif
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -289,14 +289,8 @@ namespace PschLib.Unity.Pooling
                 return;
             }
 
-            if (!isActiveAndEnabled)
-            {
-                unexpectedDestroyCounts.Clear();
-                return;
-            }
-
             isDestroyWarningScheduled = true;
-            StartCoroutine(ReportUnexpectedDestroys());
+            _ = ReportUnexpectedDestroysAsync(destroyCancellationToken);
 #endif
         }
 
@@ -428,9 +422,17 @@ namespace PschLib.Unity.Pooling
         }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-        private IEnumerator ReportUnexpectedDestroys()
+        private async Awaitable ReportUnexpectedDestroysAsync(CancellationToken cancellationToken)
         {
-            yield return null;
+            try
+            {
+                await Awaitable.NextFrameAsync(cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+
             isDestroyWarningScheduled = false;
             var unexpectedCount = 0;
 

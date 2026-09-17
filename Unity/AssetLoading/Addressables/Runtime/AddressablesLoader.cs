@@ -261,9 +261,11 @@ namespace PschLib.AssetLoading.Addressables
         public void ClearUnused()
         {
             ValidateMainThread();
-            var unloadedCount = cache.ClearUnused();
-
-            if (unloadedCount > 0)
+            try
+            {
+                cache.ClearUnused();
+            }
+            finally
             {
                 NotifyDebugStateChanged();
             }

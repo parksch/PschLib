@@ -164,6 +164,7 @@ namespace PschLib.AssetLoading.Internal
             }
 
             var unusedKeys = new List<AssetKey>();
+            var unusedAssets = new List<Object>();
 
             foreach (var pair in entries)
             {
@@ -178,10 +179,30 @@ namespace PschLib.AssetLoading.Internal
                 var key = unusedKeys[i];
                 var asset = entries[key].Asset;
                 entries.Remove(key);
-                unload(asset);
+                unusedAssets.Add(asset);
             }
 
-            return unusedKeys.Count;
+            List<Exception> exceptions = null;
+
+            for (var i = 0; i < unusedAssets.Count; i++)
+            {
+                try
+                {
+                    unload(unusedAssets[i]);
+                }
+                catch (Exception exception)
+                {
+                    if (exceptions == null)
+                    {
+                        exceptions = new List<Exception>();
+                    }
+
+                    exceptions.Add(exception);
+                }
+            }
+
+            ThrowClearExceptions(exceptions);
+            return unusedAssets.Count;
         }
 
         public void Clear(Action<Object> unload)
