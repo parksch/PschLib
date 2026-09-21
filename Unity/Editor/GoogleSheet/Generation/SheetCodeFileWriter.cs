@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
@@ -15,20 +16,15 @@ namespace PschLib.GoogleSheets
 
         public static string Write(GoogleSheetProject project, GoogleSheetImportResult result, out bool changed)
         {
-            if (project == null)
-            {
-                throw new ArgumentNullException(nameof(project));
-            }
+            ValidateWrite(project, result);
+            ValidateSharedEnums(project);
+            ValidateGeneratedTypeNames(project, new[] { result });
+            return WriteCore(project, result, out changed);
+        }
 
-            if (result == null)
-            {
-                throw new ArgumentNullException(nameof(result));
-            }
-
-            if (!SheetDataCodeGenerator.TryCreateClassName(result.Document.Name, out var className, out var classNameError))
-            {
-                throw new InvalidOperationException(classNameError);
-            }
+        private static string WriteCore(GoogleSheetProject project, GoogleSheetImportResult result, out bool changed)
+        {
+            SheetDataCodeGenerator.TryCreateClassName(result.Document.Name, out var className, out _);
 
             var targetNamespace = GoogleSheetPathUtility.GetTargetNamespace(project);
             var rootAssetPath = GoogleSheetPathUtility.GetScriptOutputPath(project);
@@ -41,11 +37,6 @@ namespace PschLib.GoogleSheets
             var functionsFileName = $"{className}.Functions.cs";
             var tableFileName = $"{className}Table.g.cs";
             var keyField = result.Fields.Find(field => field.IsKey);
-
-            if (keyField == null)
-            {
-                throw new InvalidOperationException($"The generated data does not contain an id field: {className}");
-            }
 
             changed |= WriteIfChanged(Path.Combine(sheetDirectory, dataFileName), result.GeneratedCode);
 
@@ -65,6 +56,107 @@ namespace PschLib.GoogleSheets
             return $"{sheetAssetPath}/{dataFileName}";
         }
 
+        public static void WriteAll(
+            GoogleSheetProject project,
+            IReadOnlyList<GoogleSheetImportResult> results,
+            Action<int, int> reportProgress,
+            out bool changed)
+        {
+            if (project == null)
+            {
+                throw new ArgumentNullException(nameof(project));
+            }
+
+            if (results == null)
+            {
+                throw new ArgumentNullException(nameof(results));
+            }
+
+            ValidateSharedEnums(project);
+
+            for (var index = 0; index < results.Count; index++)
+            {
+                ValidateWrite(project, results[index]);
+            }
+
+            ValidateGeneratedTypeNames(project, results);
+
+            changed = false;
+
+            for (var index = 0; index < results.Count; index++)
+            {
+                WriteCore(project, results[index], out var sheetChanged);
+                changed |= sheetChanged;
+                reportProgress?.Invoke(index + 1, results.Count);
+            }
+        }
+
+        private static void ValidateWrite(GoogleSheetProject project, GoogleSheetImportResult result)
+        {
+            if (project == null)
+            {
+                throw new ArgumentNullException(nameof(project));
+            }
+
+            if (result == null)
+            {
+                throw new ArgumentNullException(nameof(result));
+            }
+
+            if (result.Document == null)
+            {
+                throw new InvalidOperationException("A prepared Google Sheet result is missing its document.");
+            }
+
+            if (!SheetDataCodeGenerator.TryCreateClassName(result.Document.Name, out var className, out var error))
+            {
+                throw new InvalidOperationException(error);
+            }
+
+            if (result.Fields.Find(field => field.IsKey) == null)
+            {
+                throw new InvalidOperationException($"The generated data does not contain an id field: {className}");
+            }
+        }
+
+        private static void ValidateSharedEnums(GoogleSheetProject project)
+        {
+            foreach (var definition in project.SharedEnums)
+            {
+                if (definition == null || !SheetDataCodeGenerator.IsValidIdentifier(definition.Name))
+                {
+                    throw new InvalidOperationException($"Shared enum name is invalid: '{definition?.Name}'");
+                }
+
+                if (definition.Values == null)
+                {
+                    throw new InvalidOperationException($"Shared enum '{definition.Name}' has no value list.");
+                }
+
+                foreach (var value in definition.Values)
+                {
+                    if (!SheetDataCodeGenerator.IsValidIdentifier(value))
+                    {
+                        throw new InvalidOperationException($"Shared enum '{definition.Name}' contains an invalid value: '{value}'");
+                    }
+                }
+            }
+        }
+
+        private static void ValidateGeneratedTypeNames(
+            GoogleSheetProject project,
+            IReadOnlyList<GoogleSheetImportResult> results)
+        {
+            if (!SheetDataCodeGenerator.TryValidatePreparedTypeNames(
+                    project.Sheets,
+                    project.SharedEnums,
+                    results,
+                    out var error))
+            {
+                throw new InvalidOperationException(error);
+            }
+        }
+
         private static bool WriteSharedEnums(GoogleSheetProject project, string targetNamespace, string rootAssetPath)
         {
             if (project.SharedEnums.Count == 0)
@@ -76,8 +168,6 @@ namespace PschLib.GoogleSheets
             var legacyFilePath = Path.Combine(outputDirectory, $"{GoogleSheetPathUtility.GetProjectName(project)}.SharedEnums.g.cs");
             var filePath = Path.Combine(outputDirectory, "SharedEnums.g.cs");
 
-            var changed = DeleteLegacyGeneratedFile(legacyFilePath);
-
             var builder = new StringBuilder();
             builder.AppendLine($"namespace {targetNamespace}");
             builder.AppendLine("{");
@@ -85,21 +175,11 @@ namespace PschLib.GoogleSheets
 
             foreach (var definition in project.SharedEnums)
             {
-                if (definition == null || !SheetDataCodeGenerator.IsValidIdentifier(definition.Name))
-                {
-                    throw new InvalidOperationException($"Shared enum name is invalid: '{definition?.Name}'");
-                }
-
                 builder.AppendLine($"    public enum {definition.Name}");
                 builder.AppendLine("    {");
 
                 for (var index = 0; index < definition.Values.Count; index++)
                 {
-                    if (!SheetDataCodeGenerator.IsValidIdentifier(definition.Values[index]))
-                    {
-                        throw new InvalidOperationException($"Shared enum '{definition.Name}' contains an invalid value: '{definition.Values[index]}'");
-                    }
-
                     builder.AppendLine($"        {definition.Values[index]} = {index},");
                 }
 
@@ -108,6 +188,7 @@ namespace PschLib.GoogleSheets
             }
 
             builder.AppendLine("}");
+            var changed = DeleteLegacyGeneratedFile(legacyFilePath);
             return WriteIfChanged(filePath, builder.ToString()) || changed;
         }
 

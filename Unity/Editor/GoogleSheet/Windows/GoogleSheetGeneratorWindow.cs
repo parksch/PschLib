@@ -16,7 +16,8 @@ namespace PschLib.GoogleSheets
 
         private GoogleSheetSettings Settings => GoogleSheetSettings.instance;
         private GoogleSheetProject Project => Settings.Project;
-        private bool IsLocked => isBusy || GoogleSheetPendingImportProcessor.IsImporting || EditorApplication.isCompiling;
+        private bool IsLocked => isBusy || GoogleSheetPendingImportProcessor.IsImporting ||
+            GoogleSheetPendingImportProcessor.HasPendingImport || EditorApplication.isCompiling;
 
         [MenuItem("Tools/PschLib/Google Sheet Generator")]
         public static void Open()
@@ -512,20 +513,26 @@ namespace PschLib.GoogleSheets
         private async void GenerateSheet(GoogleSheetEntry sheet, bool codeOnly)
         {
             SetBusy(true);
-            GoogleSheetPendingImportProcessor.BeginCodeGeneration(1);
+            var project = Project;
+            List<SheetSharedEnumDefinition> sharedEnumSnapshot = null;
+            var codeWritten = false;
 
             try
             {
-                var result = await GoogleSheetImportService.PrepareAsync(Project, sheet);
-                var generatedPath = SheetCodeFileWriter.Write(Project, result, out var codeChanged);
+                GoogleSheetPendingImportProcessor.BeginCodeGeneration(1);
+                sharedEnumSnapshot = SheetSharedEnumCatalog.CreateSnapshot(project);
+                var result = await GoogleSheetImportService.PrepareAsync(project, sheet);
+                var generatedPath = SheetCodeFileWriter.Write(project, result, out var codeChanged);
+                codeWritten = true;
                 GoogleSheetPendingImportProcessor.ReportCodeGenerated(1, 1);
-                var generationError = CompleteGeneration(new[] { result }, codeChanged, codeOnly);
+                var generationError = CompleteGeneration(project, new[] { result }, codeChanged, codeOnly);
                 SetStatus(
-                    generationError ?? CreateGenerationStatus(sheet.Name, generatedPath, codeChanged, codeOnly),
+                    generationError ?? CreateGenerationStatus(project, sheet.Name, generatedPath, codeChanged, codeOnly),
                     generationError == null ? MessageType.Info : MessageType.Error);
             }
             catch (Exception exception)
             {
+                RestoreSharedEnumsAfterFailedCodeGeneration(project, sharedEnumSnapshot, codeWritten, exception);
                 GoogleSheetPendingImportProcessor.ReportFailure(exception);
                 SetStatus(exception.Message, MessageType.Error);
             }
@@ -538,42 +545,50 @@ namespace PschLib.GoogleSheets
         private async void GenerateSelected(bool codeOnly)
         {
             SetBusy(true);
+            var project = Project;
             var selectedCount = GetSelectedCount();
-            GoogleSheetPendingImportProcessor.BeginCodeGeneration(selectedCount);
+            List<SheetSharedEnumDefinition> sharedEnumSnapshot = null;
+            var codeWritten = false;
 
             try
             {
+                GoogleSheetPendingImportProcessor.BeginCodeGeneration(selectedCount);
+                sharedEnumSnapshot = SheetSharedEnumCatalog.CreateSnapshot(project);
                 var results = new List<GoogleSheetImportResult>(selectedCount);
 
-                foreach (var sheet in Project.Sheets)
+                foreach (var sheet in project.Sheets)
                 {
                     if (!sheet.Selected)
                     {
                         continue;
                     }
 
-                    var result = await GoogleSheetImportService.PrepareAsync(Project, sheet);
+                    var result = await GoogleSheetImportService.PrepareAsync(project, sheet);
                     results.Add(result);
                 }
 
                 var generatedCount = 0;
                 var codeChanged = false;
 
-                foreach (var result in results)
-                {
-                    SheetCodeFileWriter.Write(Project, result, out var sheetCodeChanged);
-                    codeChanged |= sheetCodeChanged;
-                    generatedCount++;
-                    GoogleSheetPendingImportProcessor.ReportCodeGenerated(generatedCount, selectedCount);
-                }
+                SheetCodeFileWriter.WriteAll(
+                    project,
+                    results,
+                    (processed, total) =>
+                    {
+                        generatedCount = processed;
+                        GoogleSheetPendingImportProcessor.ReportCodeGenerated(processed, total);
+                    },
+                    out codeChanged);
+                codeWritten = true;
 
-                var generationError = CompleteGeneration(results, codeChanged, codeOnly);
+                var generationError = CompleteGeneration(project, results, codeChanged, codeOnly);
                 SetStatus(
-                    generationError ?? CreateGenerationStatus(generatedCount, codeChanged, codeOnly),
+                    generationError ?? CreateGenerationStatus(project, generatedCount, codeChanged, codeOnly),
                     generationError == null ? MessageType.Info : MessageType.Error);
             }
             catch (Exception exception)
             {
+                RestoreSharedEnumsAfterFailedCodeGeneration(project, sharedEnumSnapshot, codeWritten, exception);
                 GoogleSheetPendingImportProcessor.ReportFailure(exception);
                 SetStatus(exception.Message, MessageType.Error);
             }
@@ -583,9 +598,30 @@ namespace PschLib.GoogleSheets
             }
         }
 
-        private string CompleteGeneration(IReadOnlyList<GoogleSheetImportResult> results, bool codeChanged, bool codeOnly)
+        private void RestoreSharedEnumsAfterFailedCodeGeneration(
+            GoogleSheetProject project,
+            List<SheetSharedEnumDefinition> snapshot,
+            bool codeWritten,
+            Exception generationException)
         {
-            var shouldGenerateAssets = Project.GenerateScriptableObject && !codeOnly;
+            if (snapshot == null || codeWritten)
+            {
+                return;
+            }
+
+            try
+            {
+                SheetSharedEnumCatalog.RestoreSnapshot(project, snapshot);
+            }
+            catch (Exception rollbackException)
+            {
+                Debug.LogError($"Google Sheet generation failed and the shared enum catalog could not be restored.\nGeneration error: {generationException}\nRollback error: {rollbackException}");
+            }
+        }
+
+        private string CompleteGeneration(GoogleSheetProject project, IReadOnlyList<GoogleSheetImportResult> results, bool codeChanged, bool codeOnly)
+        {
+            var shouldGenerateAssets = project.GenerateScriptableObject && !codeOnly;
 
             if (!shouldGenerateAssets)
             {
@@ -601,7 +637,7 @@ namespace PschLib.GoogleSheets
 
             if (codeChanged)
             {
-                GoogleSheetPendingImportProcessor.Queue(Project, results);
+                GoogleSheetPendingImportProcessor.Queue(project, results);
                 AssetDatabase.Refresh();
                 return null;
             }
@@ -611,20 +647,20 @@ namespace PschLib.GoogleSheets
                 throw new InvalidOperationException("ScriptableObject assets cannot be updated while the project has compilation errors.");
             }
 
-            var batchResult = SheetAssetWriter.WriteAll(Project, results);
+            var batchResult = SheetAssetWriter.WriteAll(project, results);
 
             if (batchResult.HasFailures)
             {
-                return GoogleSheetPendingImportProcessor.RetainAssetFailures(Project, batchResult, results.Count);
+                return GoogleSheetPendingImportProcessor.RetainAssetFailures(project, batchResult, results.Count);
             }
 
             GoogleSheetPendingImportProcessor.CompleteAssets(batchResult.SuccessCount);
             return null;
         }
 
-        private string CreateGenerationStatus(string sheetName, string generatedPath, bool codeChanged, bool codeOnly)
+        private string CreateGenerationStatus(GoogleSheetProject project, string sheetName, string generatedPath, bool codeChanged, bool codeOnly)
         {
-            if (codeOnly || !Project.GenerateScriptableObject)
+            if (codeOnly || !project.GenerateScriptableObject)
             {
                 return codeChanged ? $"Generated code for {sheetName}: {generatedPath}." : $"Code is already up to date for {sheetName}: {generatedPath}.";
             }
@@ -634,9 +670,9 @@ namespace PschLib.GoogleSheets
                 : $"Code was unchanged and the SO was updated for {sheetName}: {generatedPath}.";
         }
 
-        private string CreateGenerationStatus(int generatedCount, bool codeChanged, bool codeOnly)
+        private string CreateGenerationStatus(GoogleSheetProject project, int generatedCount, bool codeChanged, bool codeOnly)
         {
-            if (codeOnly || !Project.GenerateScriptableObject)
+            if (codeOnly || !project.GenerateScriptableObject)
             {
                 return codeChanged ? $"Generated code for {generatedCount} selected sheet(s)." : $"Code is already up to date for {generatedCount} selected sheet(s).";
             }

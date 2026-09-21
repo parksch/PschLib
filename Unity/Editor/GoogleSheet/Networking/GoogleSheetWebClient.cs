@@ -7,6 +7,7 @@ namespace PschLib.GoogleSheets
 {
     internal sealed class GoogleSheetWebClient
     {
+        private const int RequestTimeoutSeconds = 60;
         private readonly string webAppUrl;
 
         public GoogleSheetWebClient(string webAppUrl)
@@ -97,6 +98,7 @@ namespace PschLib.GoogleSheets
         {
             var completion = new TaskCompletionSource<string>();
             request.redirectLimit = 10;
+            request.timeout = RequestTimeoutSeconds;
 
             var operation = request.SendWebRequest();
             operation.completed += _ =>

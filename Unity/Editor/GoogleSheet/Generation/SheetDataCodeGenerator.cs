@@ -152,11 +152,112 @@ namespace PschLib.GoogleSheets
             return true;
         }
 
+        internal static bool TryValidatePreparedTypeNames(
+            IReadOnlyList<GoogleSheetEntry> sheets,
+            IReadOnlyList<SheetSharedEnumDefinition> sharedEnums,
+            IReadOnlyList<GoogleSheetImportResult> results,
+            out string error)
+        {
+            error = null;
+
+            if (sheets == null)
+            {
+                error = "The Google Sheet project does not contain a sheet list.";
+                return false;
+            }
+
+            if (sharedEnums == null)
+            {
+                error = "The Google Sheet project does not contain a shared enum list.";
+                return false;
+            }
+
+            if (results == null)
+            {
+                error = "The prepared Google Sheet result list is missing.";
+                return false;
+            }
+
+            var ownersByTypeName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var sheet in sheets)
+            {
+                if (sheet == null)
+                {
+                    continue;
+                }
+
+                if (!TryCreateClassName(sheet.Name, out var className, out var classNameError))
+                {
+                    error = $"Sheet '{sheet.Name}' (ID {sheet.SheetId}): {classNameError}";
+                    return false;
+                }
+
+                var owner = $"sheet '{sheet.Name}' (ID {sheet.SheetId})";
+
+                if (!TryReserveTypeName(ownersByTypeName, className, $"{owner} data class", out error) ||
+                    !TryReserveTypeName(ownersByTypeName, $"{className}Table", $"{owner} table class", out error))
+                {
+                    return false;
+                }
+            }
+
+            foreach (var sharedEnum in sharedEnums)
+            {
+                if (sharedEnum == null || !IsValidIdentifier(sharedEnum.Name))
+                {
+                    error = $"Shared enum name is invalid: '{sharedEnum?.Name}'";
+                    return false;
+                }
+
+                if (!TryReserveTypeName(ownersByTypeName, sharedEnum.Name, $"shared enum '{sharedEnum.Name}'", out error))
+                {
+                    return false;
+                }
+            }
+
+            foreach (var result in results)
+            {
+                if (result?.Document == null || result.Fields == null)
+                {
+                    error = "A prepared Google Sheet result is incomplete.";
+                    return false;
+                }
+
+                if (!TryCreateClassName(result.Document.Name, out var className, out var classNameError))
+                {
+                    error = $"Sheet '{result.Document.Name}': {classNameError}";
+                    return false;
+                }
+
+                foreach (var field in result.Fields)
+                {
+                    if (field?.Type == null || field.Type.EnumMode != SheetEnumMode.Local)
+                    {
+                        continue;
+                    }
+
+                    var enumName = $"{className}{field.Name}";
+
+                    if (!TryReserveTypeName(
+                            ownersByTypeName,
+                            enumName,
+                            $"local enum '{enumName}' in sheet '{result.Document.Name}'",
+                            out error))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
         private static bool TryReserveTypeName(Dictionary<string, string> ownersByTypeName, string typeName, string owner, out string error)
         {
             if (ownersByTypeName.TryGetValue(typeName, out var existingOwner))
             {
-                error = $"Generated type or file name '{typeName}' conflicts between {existingOwner} and {owner}. Rename one of the sheets.";
+                error = $"Generated type or file name '{typeName}' conflicts between {existingOwner} and {owner}. Rename the conflicting sheet or enum.";
                 return false;
             }
 

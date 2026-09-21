@@ -88,7 +88,11 @@ namespace PschLib.GoogleSheets
 
         public static void BeginCodeGeneration(int sheetCount)
         {
-            CleanupPending();
+            if (HasPendingImports())
+            {
+                throw new InvalidOperationException("A pending Google Sheet import already exists. Continue or cancel it before starting another generation.");
+            }
+
             SetState(GoogleSheetImportState.PreparingData, $"Downloading and validating sheet data... (0/{sheetCount})");
             GoogleSheetImportProgressWindow.Open();
         }
@@ -254,10 +258,30 @@ namespace PschLib.GoogleSheets
                 var snapshot = ReadSnapshot(pending.SnapshotFilePath);
                 ValidateSnapshotSettings(project, pending.ProjectAssetPath, snapshot);
                 var results = new List<GoogleSheetImportResult>(snapshot.Sheets.Count);
+                var sharedEnumSnapshot = SheetSharedEnumCatalog.CreateSnapshot(project);
 
-                foreach (var sheet in snapshot.Sheets)
+                try
                 {
-                    results.Add(GoogleSheetImportService.Prepare(project, CreateDocument(sheet)));
+                    foreach (var sheet in snapshot.Sheets)
+                    {
+                        results.Add(GoogleSheetImportService.Prepare(project, CreateDocument(sheet)));
+                    }
+                }
+                catch (Exception preparationException)
+                {
+                    try
+                    {
+                        SheetSharedEnumCatalog.RestoreSnapshot(project, sharedEnumSnapshot);
+                    }
+                    catch (Exception rollbackException)
+                    {
+                        throw new AggregateException(
+                            "Pending sheet preparation failed and the shared enum catalog could not be restored.",
+                            preparationException,
+                            rollbackException);
+                    }
+
+                    throw;
                 }
 
                 SetState(GoogleSheetImportState.CreatingAssets, $"Creating ScriptableObject assets... (0/{results.Count})");

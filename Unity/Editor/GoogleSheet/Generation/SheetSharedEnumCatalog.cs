@@ -10,6 +10,7 @@ namespace PschLib.GoogleSheets
         {
             error = null;
             var changed = false;
+            var updatedDefinitions = Clone(project.SharedEnums);
 
             if (!SheetDataCodeGenerator.TryCreateClassName(sheetName, out var currentClassName, out error))
             {
@@ -18,7 +19,7 @@ namespace PschLib.GoogleSheets
 
             foreach (var field in fields)
             {
-                if (field.Type.EnumMode == SheetEnumMode.Local && Find(project.SharedEnums, $"{currentClassName}{field.Name}") != null)
+                if (field.Type.EnumMode == SheetEnumMode.Local && Find(updatedDefinitions, $"{currentClassName}{field.Name}") != null)
                 {
                     error = $"Local enum '{currentClassName}{field.Name}' conflicts with an existing shared enum.";
                     return false;
@@ -55,7 +56,7 @@ namespace PschLib.GoogleSheets
                     }
                 }
 
-                var definition = Find(project.SharedEnums, enumTypeName);
+                var definition = Find(updatedDefinitions, enumTypeName);
 
                 if (definition == null)
                 {
@@ -63,7 +64,7 @@ namespace PschLib.GoogleSheets
                     {
                         Name = enumTypeName
                     };
-                    project.SharedEnums.Add(definition);
+                    updatedDefinitions.Add(definition);
                     changed = true;
                 }
                 else if (definition.Name != enumTypeName)
@@ -103,11 +104,69 @@ namespace PschLib.GoogleSheets
 
             if (changed)
             {
+                Replace(project.SharedEnums, updatedDefinitions);
                 EditorUtility.SetDirty(project);
                 AssetDatabase.SaveAssets();
             }
 
             return true;
+        }
+
+        public static List<SheetSharedEnumDefinition> CreateSnapshot(GoogleSheetProject project)
+        {
+            if (project == null)
+            {
+                throw new ArgumentNullException(nameof(project));
+            }
+
+            return Clone(project.SharedEnums);
+        }
+
+        public static void RestoreSnapshot(GoogleSheetProject project, List<SheetSharedEnumDefinition> snapshot)
+        {
+            if (project == null)
+            {
+                throw new ArgumentNullException(nameof(project));
+            }
+
+            if (snapshot == null)
+            {
+                throw new ArgumentNullException(nameof(snapshot));
+            }
+
+            Replace(project.SharedEnums, Clone(snapshot));
+            EditorUtility.SetDirty(project);
+            AssetDatabase.SaveAssets();
+        }
+
+        private static List<SheetSharedEnumDefinition> Clone(List<SheetSharedEnumDefinition> source)
+        {
+            var result = new List<SheetSharedEnumDefinition>(source.Count);
+
+            foreach (var definition in source)
+            {
+                if (definition == null)
+                {
+                    result.Add(null);
+                    continue;
+                }
+
+                result.Add(new SheetSharedEnumDefinition
+                {
+                    Name = definition.Name,
+                    Values = definition.Values == null
+                        ? new List<string>()
+                        : new List<string>(definition.Values)
+                });
+            }
+
+            return result;
+        }
+
+        private static void Replace(List<SheetSharedEnumDefinition> target, List<SheetSharedEnumDefinition> source)
+        {
+            target.Clear();
+            target.AddRange(source);
         }
 
         private static string GetEnumTypeName(SheetField field)
