@@ -49,6 +49,12 @@ namespace PschLib.GoogleSheets
                     return false;
                 }
 
+                if (string.Equals(field.Name, className, StringComparison.Ordinal))
+                {
+                    error = $"Field '{field.Name}' cannot have the same name as its containing class '{className}'.";
+                    return false;
+                }
+
                 if (!fieldNames.Add(field.Name))
                 {
                     error = $"Field '{field.Name}' is duplicated.";
@@ -106,6 +112,56 @@ namespace PschLib.GoogleSheets
             builder.AppendLine("    }");
             builder.AppendLine("}");
             code = builder.ToString();
+            return true;
+        }
+
+        internal static bool TryValidateGeneratedTypeNames(IReadOnlyList<GoogleSheetEntry> sheets, out string error)
+        {
+            error = null;
+
+            if (sheets == null)
+            {
+                error = "The Google Sheet project does not contain a sheet list.";
+                return false;
+            }
+
+            var ownersByTypeName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var sheet in sheets)
+            {
+                if (sheet == null)
+                {
+                    continue;
+                }
+
+                if (!TryCreateClassName(sheet.Name, out var className, out var classNameError))
+                {
+                    error = $"Sheet '{sheet.Name}' (ID {sheet.SheetId}): {classNameError}";
+                    return false;
+                }
+
+                var owner = $"sheet '{sheet.Name}' (ID {sheet.SheetId})";
+
+                if (!TryReserveTypeName(ownersByTypeName, className, $"{owner} data class", out error) ||
+                    !TryReserveTypeName(ownersByTypeName, $"{className}Table", $"{owner} table class", out error))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool TryReserveTypeName(Dictionary<string, string> ownersByTypeName, string typeName, string owner, out string error)
+        {
+            if (ownersByTypeName.TryGetValue(typeName, out var existingOwner))
+            {
+                error = $"Generated type or file name '{typeName}' conflicts between {existingOwner} and {owner}. Rename one of the sheets.";
+                return false;
+            }
+
+            ownersByTypeName.Add(typeName, owner);
+            error = null;
             return true;
         }
 

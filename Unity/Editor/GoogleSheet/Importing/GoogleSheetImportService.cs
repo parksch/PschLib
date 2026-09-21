@@ -17,7 +17,27 @@ namespace PschLib.GoogleSheets
                 throw new ArgumentNullException(nameof(entry));
             }
 
+            if (!SheetDataCodeGenerator.TryValidateGeneratedTypeNames(project.Sheets, out var typeNameError))
+            {
+                throw new InvalidOperationException(typeNameError);
+            }
+
             var document = await GoogleSheetDocumentLoader.LoadAsync(project, entry);
+
+            return Prepare(project, document);
+        }
+
+        public static GoogleSheetImportResult Prepare(GoogleSheetProject project, SheetDocument document)
+        {
+            if (project == null)
+            {
+                throw new ArgumentNullException(nameof(project));
+            }
+
+            if (document == null)
+            {
+                throw new ArgumentNullException(nameof(document));
+            }
 
             if (!SheetHeaderParser.TryParse(document, out var fields, out var headerError))
             {

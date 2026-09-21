@@ -8,8 +8,8 @@ namespace PschLib.GoogleSheets
         public static void Open()
         {
             var window = GetWindow<GoogleSheetImportProgressWindow>(true, "Google Sheet Import", true);
-            window.minSize = new Vector2(420f, 145f);
-            window.maxSize = new Vector2(420f, 145f);
+            window.minSize = new Vector2(420f, 185f);
+            window.maxSize = new Vector2(420f, 185f);
             window.ShowUtility();
         }
 
@@ -30,9 +30,29 @@ namespace PschLib.GoogleSheets
             EditorGUILayout.Space(6f);
 
             var state = GoogleSheetPendingImportProcessor.State;
-            var messageType = state == GoogleSheetImportState.Failed ? MessageType.Error : state == GoogleSheetImportState.Completed ? MessageType.Info : MessageType.None;
+            var messageType = state == GoogleSheetImportState.Failed || state == GoogleSheetImportState.CompilationFailed || state == GoogleSheetImportState.PartialFailure
+                ? MessageType.Error
+                : state == GoogleSheetImportState.Completed ? MessageType.Info : MessageType.None;
             EditorGUILayout.HelpBox(GoogleSheetPendingImportProcessor.StatusMessage, messageType);
             EditorGUILayout.Space(6f);
+
+            if (GoogleSheetPendingImportProcessor.IsFinished && GoogleSheetPendingImportProcessor.HasPendingImport)
+            {
+                EditorGUILayout.BeginHorizontal();
+
+                if (GUILayout.Button("Continue SO Generation", GUILayout.Height(26f)))
+                {
+                    GoogleSheetPendingImportProcessor.ContinuePending();
+                }
+
+                if (GUILayout.Button("Cancel Pending Import", GUILayout.Height(26f)))
+                {
+                    GoogleSheetPendingImportProcessor.CancelPending();
+                }
+
+                EditorGUILayout.EndHorizontal();
+                EditorGUILayout.Space(6f);
+            }
 
             using (new EditorGUI.DisabledScope(!GoogleSheetPendingImportProcessor.IsFinished))
             {

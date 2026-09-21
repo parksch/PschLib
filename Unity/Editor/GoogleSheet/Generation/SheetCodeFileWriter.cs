@@ -10,6 +10,11 @@ namespace PschLib.GoogleSheets
 
         public static string Write(GoogleSheetProject project, GoogleSheetImportResult result)
         {
+            return Write(project, result, out _);
+        }
+
+        public static string Write(GoogleSheetProject project, GoogleSheetImportResult result, out bool changed)
+        {
             if (project == null)
             {
                 throw new ArgumentNullException(nameof(project));
@@ -30,7 +35,7 @@ namespace PschLib.GoogleSheets
             var sheetAssetPath = $"{rootAssetPath}/{className}";
             var sheetDirectory = GoogleSheetPathUtility.GetAbsolutePath(sheetAssetPath);
             Directory.CreateDirectory(sheetDirectory);
-            WriteSharedEnums(project, targetNamespace, rootAssetPath);
+            changed = WriteSharedEnums(project, targetNamespace, rootAssetPath);
 
             var dataFileName = $"{className}.Data.g.cs";
             var functionsFileName = $"{className}.Functions.cs";
@@ -42,11 +47,11 @@ namespace PschLib.GoogleSheets
                 throw new InvalidOperationException($"The generated data does not contain an id field: {className}");
             }
 
-            File.WriteAllText(Path.Combine(sheetDirectory, dataFileName), result.GeneratedCode, utf8WithoutBom);
+            changed |= WriteIfChanged(Path.Combine(sheetDirectory, dataFileName), result.GeneratedCode);
 
             if (project.GenerateScriptableObject)
             {
-                File.WriteAllText(Path.Combine(sheetDirectory, tableFileName), CreateTableCode(targetNamespace, className, keyField.Name), utf8WithoutBom);
+                changed |= WriteIfChanged(Path.Combine(sheetDirectory, tableFileName), CreateTableCode(targetNamespace, className, keyField.Name));
             }
 
             var functionsPath = Path.Combine(sheetDirectory, functionsFileName);
@@ -54,23 +59,24 @@ namespace PschLib.GoogleSheets
             if (!File.Exists(functionsPath))
             {
                 File.WriteAllText(functionsPath, CreateFunctionsCode(targetNamespace, className), utf8WithoutBom);
+                changed = true;
             }
 
             return $"{sheetAssetPath}/{dataFileName}";
         }
 
-        private static void WriteSharedEnums(GoogleSheetProject project, string targetNamespace, string rootAssetPath)
+        private static bool WriteSharedEnums(GoogleSheetProject project, string targetNamespace, string rootAssetPath)
         {
             if (project.SharedEnums.Count == 0)
             {
-                return;
+                return false;
             }
 
             var outputDirectory = GoogleSheetPathUtility.GetAbsolutePath(rootAssetPath);
             var legacyFilePath = Path.Combine(outputDirectory, $"{GoogleSheetPathUtility.GetProjectName(project)}.SharedEnums.g.cs");
             var filePath = Path.Combine(outputDirectory, "SharedEnums.g.cs");
 
-            DeleteLegacyGeneratedFile(legacyFilePath);
+            var changed = DeleteLegacyGeneratedFile(legacyFilePath);
 
             var builder = new StringBuilder();
             builder.AppendLine($"namespace {targetNamespace}");
@@ -102,14 +108,17 @@ namespace PschLib.GoogleSheets
             }
 
             builder.AppendLine("}");
-            File.WriteAllText(filePath, builder.ToString(), utf8WithoutBom);
+            return WriteIfChanged(filePath, builder.ToString()) || changed;
         }
 
-        private static void DeleteLegacyGeneratedFile(string filePath)
+        private static bool DeleteLegacyGeneratedFile(string filePath)
         {
+            var deleted = false;
+
             if (File.Exists(filePath))
             {
                 File.Delete(filePath);
+                deleted = true;
             }
 
             var metaPath = $"{filePath}.meta";
@@ -117,7 +126,21 @@ namespace PschLib.GoogleSheets
             if (File.Exists(metaPath))
             {
                 File.Delete(metaPath);
+                deleted = true;
             }
+
+            return deleted;
+        }
+
+        private static bool WriteIfChanged(string filePath, string contents)
+        {
+            if (File.Exists(filePath) && string.Equals(File.ReadAllText(filePath), contents, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            File.WriteAllText(filePath, contents, utf8WithoutBom);
+            return true;
         }
 
         private static string CreateFunctionsCode(string targetNamespace, string className)

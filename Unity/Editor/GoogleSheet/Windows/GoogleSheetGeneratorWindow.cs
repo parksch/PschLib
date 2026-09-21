@@ -268,10 +268,19 @@ namespace PschLib.GoogleSheets
 
             using (new EditorGUI.DisabledScope(IsLocked || selectedCount == 0))
             {
+                EditorGUILayout.BeginHorizontal();
+
                 if (GUILayout.Button($"Generate Selected ({selectedCount})", GUILayout.Height(28)))
                 {
-                    GenerateSelected();
+                    GenerateSelected(false);
                 }
+
+                if (GUILayout.Button("Code Only", GUILayout.Width(100), GUILayout.Height(28)))
+                {
+                    GenerateSelected(true);
+                }
+
+                EditorGUILayout.EndHorizontal();
             }
         }
 
@@ -296,9 +305,14 @@ namespace PschLib.GoogleSheets
 
             using (new EditorGUI.DisabledScope(IsLocked))
             {
-                if (GUILayout.Button("Generate", GUILayout.Width(80)))
+                if (GUILayout.Button("Generate", GUILayout.Width(75)))
                 {
-                    GenerateSheet(sheet);
+                    GenerateSheet(sheet, false);
+                }
+
+                if (GUILayout.Button("Code Only", GUILayout.Width(75)))
+                {
+                    GenerateSheet(sheet, true);
                 }
             }
 
@@ -307,6 +321,24 @@ namespace PschLib.GoogleSheets
 
         private void DrawStatus()
         {
+            if (GoogleSheetPendingImportProcessor.IsFinished && GoogleSheetPendingImportProcessor.HasPendingImport)
+            {
+                EditorGUILayout.Space();
+                EditorGUILayout.BeginHorizontal();
+
+                if (GUILayout.Button("Continue SO Generation"))
+                {
+                    GoogleSheetPendingImportProcessor.ContinuePending();
+                }
+
+                if (GUILayout.Button("Cancel Pending Import"))
+                {
+                    GoogleSheetPendingImportProcessor.CancelPending();
+                }
+
+                EditorGUILayout.EndHorizontal();
+            }
+
             if (string.IsNullOrWhiteSpace(statusMessage))
             {
                 return;
@@ -477,7 +509,7 @@ namespace PschLib.GoogleSheets
             return count;
         }
 
-        private async void GenerateSheet(GoogleSheetEntry sheet)
+        private async void GenerateSheet(GoogleSheetEntry sheet, bool codeOnly)
         {
             SetBusy(true);
             GoogleSheetPendingImportProcessor.BeginCodeGeneration(1);
@@ -485,11 +517,12 @@ namespace PschLib.GoogleSheets
             try
             {
                 var result = await GoogleSheetImportService.PrepareAsync(Project, sheet);
-                var generatedPath = SheetCodeFileWriter.Write(Project, result);
+                var generatedPath = SheetCodeFileWriter.Write(Project, result, out var codeChanged);
                 GoogleSheetPendingImportProcessor.ReportCodeGenerated(1, 1);
-                CompleteGeneration(new[] { sheet }, 1);
-                SetStatus(Project.GenerateScriptableObject ? $"Generated code for {sheet.Name}: {generatedPath}. Asset generation is queued." : $"Generated code for {sheet.Name}: {generatedPath}.", MessageType.Info);
-                AssetDatabase.Refresh();
+                var generationError = CompleteGeneration(new[] { result }, codeChanged, codeOnly);
+                SetStatus(
+                    generationError ?? CreateGenerationStatus(sheet.Name, generatedPath, codeChanged, codeOnly),
+                    generationError == null ? MessageType.Info : MessageType.Error);
             }
             catch (Exception exception)
             {
@@ -502,7 +535,7 @@ namespace PschLib.GoogleSheets
             }
         }
 
-        private async void GenerateSelected()
+        private async void GenerateSelected(bool codeOnly)
         {
             SetBusy(true);
             var selectedCount = GetSelectedCount();
@@ -510,8 +543,7 @@ namespace PschLib.GoogleSheets
 
             try
             {
-                var generatedCount = 0;
-                var generatedSheets = new List<GoogleSheetEntry>();
+                var results = new List<GoogleSheetImportResult>(selectedCount);
 
                 foreach (var sheet in Project.Sheets)
                 {
@@ -521,15 +553,24 @@ namespace PschLib.GoogleSheets
                     }
 
                     var result = await GoogleSheetImportService.PrepareAsync(Project, sheet);
-                    SheetCodeFileWriter.Write(Project, result);
-                    generatedSheets.Add(sheet);
+                    results.Add(result);
+                }
+
+                var generatedCount = 0;
+                var codeChanged = false;
+
+                foreach (var result in results)
+                {
+                    SheetCodeFileWriter.Write(Project, result, out var sheetCodeChanged);
+                    codeChanged |= sheetCodeChanged;
                     generatedCount++;
                     GoogleSheetPendingImportProcessor.ReportCodeGenerated(generatedCount, selectedCount);
                 }
 
-                CompleteGeneration(generatedSheets, generatedCount);
-                SetStatus(Project.GenerateScriptableObject ? $"Generated code for {generatedCount} selected sheet(s). Asset generation is queued." : $"Generated code for {generatedCount} selected sheet(s).", MessageType.Info);
-                AssetDatabase.Refresh();
+                var generationError = CompleteGeneration(results, codeChanged, codeOnly);
+                SetStatus(
+                    generationError ?? CreateGenerationStatus(generatedCount, codeChanged, codeOnly),
+                    generationError == null ? MessageType.Info : MessageType.Error);
             }
             catch (Exception exception)
             {
@@ -542,15 +583,67 @@ namespace PschLib.GoogleSheets
             }
         }
 
-        private void CompleteGeneration(IEnumerable<GoogleSheetEntry> sheets, int generatedCount)
+        private string CompleteGeneration(IReadOnlyList<GoogleSheetImportResult> results, bool codeChanged, bool codeOnly)
         {
-            if (Project.GenerateScriptableObject)
+            var shouldGenerateAssets = Project.GenerateScriptableObject && !codeOnly;
+
+            if (!shouldGenerateAssets)
             {
-                GoogleSheetPendingImportProcessor.Queue(Project, sheets);
-                return;
+                GoogleSheetPendingImportProcessor.CompleteWithoutAssets(results.Count);
+
+                if (codeChanged)
+                {
+                    AssetDatabase.Refresh();
+                }
+
+                return null;
             }
 
-            GoogleSheetPendingImportProcessor.CompleteWithoutAssets(generatedCount);
+            if (codeChanged)
+            {
+                GoogleSheetPendingImportProcessor.Queue(Project, results);
+                AssetDatabase.Refresh();
+                return null;
+            }
+
+            if (EditorApplication.isCompiling || EditorUtility.scriptCompilationFailed)
+            {
+                throw new InvalidOperationException("ScriptableObject assets cannot be updated while the project has compilation errors.");
+            }
+
+            var batchResult = SheetAssetWriter.WriteAll(Project, results);
+
+            if (batchResult.HasFailures)
+            {
+                return GoogleSheetPendingImportProcessor.RetainAssetFailures(Project, batchResult, results.Count);
+            }
+
+            GoogleSheetPendingImportProcessor.CompleteAssets(batchResult.SuccessCount);
+            return null;
+        }
+
+        private string CreateGenerationStatus(string sheetName, string generatedPath, bool codeChanged, bool codeOnly)
+        {
+            if (codeOnly || !Project.GenerateScriptableObject)
+            {
+                return codeChanged ? $"Generated code for {sheetName}: {generatedPath}." : $"Code is already up to date for {sheetName}: {generatedPath}.";
+            }
+
+            return codeChanged
+                ? $"Generated code for {sheetName}: {generatedPath}. SO generation will continue after compilation."
+                : $"Code was unchanged and the SO was updated for {sheetName}: {generatedPath}.";
+        }
+
+        private string CreateGenerationStatus(int generatedCount, bool codeChanged, bool codeOnly)
+        {
+            if (codeOnly || !Project.GenerateScriptableObject)
+            {
+                return codeChanged ? $"Generated code for {generatedCount} selected sheet(s)." : $"Code is already up to date for {generatedCount} selected sheet(s).";
+            }
+
+            return codeChanged
+                ? $"Generated code for {generatedCount} selected sheet(s). SO generation will continue after compilation."
+                : $"Code was unchanged and {generatedCount} SO asset(s) were updated.";
         }
 
         private int FindSelectedRemoteProject()

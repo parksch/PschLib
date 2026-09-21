@@ -9,6 +9,15 @@ namespace PschLib.Unity.Lifecycle
     {
         private void Awake()
         {
+            if (transform.parent != null)
+            {
+                Debug.LogError(
+                    $"[{nameof(DontDestroyOnLoadObject)}] must be attached to a root GameObject. " +
+                    $"'{name}' will not be moved to the DontDestroyOnLoad scene.",
+                    this);
+                return;
+            }
+
             DontDestroyOnLoad(gameObject);
         }
     }

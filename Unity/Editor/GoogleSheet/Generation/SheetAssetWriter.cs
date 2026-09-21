@@ -1,13 +1,72 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 
 namespace PschLib.GoogleSheets
 {
+    internal sealed class SheetAssetWriteFailure
+    {
+        public SheetAssetWriteFailure(GoogleSheetImportResult result, Exception exception)
+        {
+            Result = result;
+            Exception = exception;
+        }
+
+        public GoogleSheetImportResult Result { get; }
+        public Exception Exception { get; }
+    }
+
+    internal sealed class SheetAssetBatchWriteResult
+    {
+        public int SuccessCount { get; set; }
+        public List<SheetAssetWriteFailure> Failures { get; } = new List<SheetAssetWriteFailure>();
+        public bool HasFailures => Failures.Count > 0;
+    }
+
     internal static class SheetAssetWriter
     {
+        public static SheetAssetBatchWriteResult WriteAll(
+            GoogleSheetProject project,
+            IReadOnlyList<GoogleSheetImportResult> results,
+            Action<int, int> reportProgress = null)
+        {
+            if (project == null)
+            {
+                throw new ArgumentNullException(nameof(project));
+            }
+
+            if (results == null)
+            {
+                throw new ArgumentNullException(nameof(results));
+            }
+
+            var batchResult = new SheetAssetBatchWriteResult();
+
+            for (var index = 0; index < results.Count; index++)
+            {
+                var result = results[index];
+
+                try
+                {
+                    var assetPath = Write(project, result);
+                    batchResult.SuccessCount++;
+                    Debug.Log($"Google Sheet asset generated: {assetPath}");
+                }
+                catch (Exception exception)
+                {
+                    batchResult.Failures.Add(new SheetAssetWriteFailure(result, exception));
+                    Debug.LogError($"Google Sheet asset generation failed for '{GetSheetName(result)}': {exception}");
+                }
+
+                reportProgress?.Invoke(index + 1, results.Count);
+            }
+
+            return batchResult;
+        }
+
         public static string Write(GoogleSheetProject project, GoogleSheetImportResult result)
         {
             if (project == null)
@@ -52,6 +111,8 @@ namespace PschLib.GoogleSheets
 
             var assetPath = $"{assetFolder}/{className}Table.asset";
             var tableAsset = AssetDatabase.LoadAssetAtPath<ScriptableObject>(assetPath);
+            var createdAsset = false;
+            object previousRows = null;
 
             if (tableAsset == null)
             {
@@ -62,6 +123,7 @@ namespace PschLib.GoogleSheets
 
                 tableAsset = ScriptableObject.CreateInstance(tableType);
                 AssetDatabase.CreateAsset(tableAsset, assetPath);
+                createdAsset = true;
             }
 
             if (tableAsset.GetType() != tableType)
@@ -69,17 +131,65 @@ namespace PschLib.GoogleSheets
                 throw new InvalidOperationException($"The existing asset type does not match {tableType.FullName}: '{assetPath}'.");
             }
 
-            Undo.RecordObject(tableAsset, $"Import {className} Sheet");
-            rowsField.SetValue(tableAsset, rows);
-
-            if (tableAsset is ISerializationCallbackReceiver serializationCallbackReceiver)
+            if (!createdAsset)
             {
-                serializationCallbackReceiver.OnAfterDeserialize();
+                previousRows = rowsField.GetValue(tableAsset);
             }
 
-            EditorUtility.SetDirty(tableAsset);
-            AssetDatabase.SaveAssets();
-            return assetPath;
+            try
+            {
+                Undo.RecordObject(tableAsset, $"Import {className} Sheet");
+                rowsField.SetValue(tableAsset, rows);
+
+                if (tableAsset is ISerializationCallbackReceiver serializationCallbackReceiver)
+                {
+                    serializationCallbackReceiver.OnAfterDeserialize();
+                }
+
+                EditorUtility.SetDirty(tableAsset);
+                AssetDatabase.SaveAssets();
+                return assetPath;
+            }
+            catch
+            {
+                RollbackAsset(tableAsset, rowsField, assetPath, createdAsset, previousRows);
+                throw;
+            }
+        }
+
+        private static void RollbackAsset(
+            ScriptableObject tableAsset,
+            FieldInfo rowsField,
+            string assetPath,
+            bool createdAsset,
+            object previousRows)
+        {
+            try
+            {
+                if (createdAsset)
+                {
+                    AssetDatabase.DeleteAsset(assetPath);
+                    return;
+                }
+
+                if (tableAsset == null || rowsField == null)
+                {
+                    return;
+                }
+
+                rowsField.SetValue(tableAsset, previousRows);
+                EditorUtility.SetDirty(tableAsset);
+                AssetDatabase.SaveAssets();
+            }
+            catch (Exception rollbackException)
+            {
+                Debug.LogError($"Failed to roll back Google Sheet asset '{assetPath}': {rollbackException}");
+            }
+        }
+
+        private static string GetSheetName(GoogleSheetImportResult result)
+        {
+            return result?.Document == null ? "Unknown" : result.Document.Name;
         }
 
         private static IList CreateRows(Type dataType, GoogleSheetImportResult result)
