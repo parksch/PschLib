@@ -43,21 +43,23 @@ namespace PschLib.GoogleSheets
 
             foreach (var field in fields)
             {
-                if (field == null || !IsValidIdentifier(field.Name))
+                var memberName = field == null ? null : GetMemberName(field.Name);
+
+                if (!IsValidIdentifier(memberName))
                 {
                     error = $"'{field?.Name}' is not a valid C# field name.";
                     return false;
                 }
 
-                if (string.Equals(field.Name, className, StringComparison.Ordinal))
+                if (string.Equals(memberName, className, StringComparison.Ordinal))
                 {
                     error = $"Field '{field.Name}' cannot have the same name as its containing class '{className}'.";
                     return false;
                 }
 
-                if (!fieldNames.Add(field.Name))
+                if (!fieldNames.Add(memberName))
                 {
-                    error = $"Field '{field.Name}' is duplicated.";
+                    error = $"Field '{field.Name}' generates a duplicate member name '{memberName}'.";
                     return false;
                 }
 
@@ -106,7 +108,7 @@ namespace PschLib.GoogleSheets
                     return false;
                 }
 
-                builder.AppendLine($"        public {typeName} {field.Name};");
+                builder.AppendLine($"        public {typeName} {GetMemberName(field.Name)};");
             }
 
             builder.AppendLine("    }");
@@ -156,6 +158,7 @@ namespace PschLib.GoogleSheets
             IReadOnlyList<GoogleSheetEntry> sheets,
             IReadOnlyList<SheetSharedEnumDefinition> sharedEnums,
             IReadOnlyList<GoogleSheetImportResult> results,
+            IReadOnlyList<KeyValuePair<string, string>> existingTypes,
             out string error)
         {
             error = null;
@@ -175,6 +178,12 @@ namespace PschLib.GoogleSheets
             if (results == null)
             {
                 error = "The prepared Google Sheet result list is missing.";
+                return false;
+            }
+
+            if (existingTypes == null)
+            {
+                error = "The existing generated type list is missing.";
                 return false;
             }
 
@@ -204,13 +213,15 @@ namespace PschLib.GoogleSheets
 
             foreach (var sharedEnum in sharedEnums)
             {
-                if (sharedEnum == null || !IsValidIdentifier(sharedEnum.Name))
+                if (sharedEnum == null || !IsValidIdentifier(GetEnumName(sharedEnum.Name)))
                 {
                     error = $"Shared enum name is invalid: '{sharedEnum?.Name}'";
                     return false;
                 }
 
-                if (!TryReserveTypeName(ownersByTypeName, sharedEnum.Name, $"shared enum '{sharedEnum.Name}'", out error))
+                var enumName = GetEnumName(sharedEnum.Name);
+
+                if (!TryReserveTypeName(ownersByTypeName, enumName, $"shared enum '{sharedEnum.Name}'", out error))
                 {
                     return false;
                 }
@@ -237,7 +248,7 @@ namespace PschLib.GoogleSheets
                         continue;
                     }
 
-                    var enumName = $"{className}{field.Name}";
+                    var enumName = GetLocalEnumName(className, field.Name);
 
                     if (!TryReserveTypeName(
                             ownersByTypeName,
@@ -250,6 +261,14 @@ namespace PschLib.GoogleSheets
                 }
             }
 
+            foreach (var existingType in existingTypes)
+            {
+                if (!TryReserveTypeName(ownersByTypeName, existingType.Key, existingType.Value, out error))
+                {
+                    return false;
+                }
+            }
+
             return true;
         }
 
@@ -257,7 +276,7 @@ namespace PschLib.GoogleSheets
         {
             if (ownersByTypeName.TryGetValue(typeName, out var existingOwner))
             {
-                error = $"Generated type or file name '{typeName}' conflicts between {existingOwner} and {owner}. Rename the conflicting sheet or enum.";
+                error = $"Generated type or file name '{typeName}' conflicts between {existingOwner} and {owner}. Resolve the conflict before generating code.";
                 return false;
             }
 
@@ -278,7 +297,7 @@ namespace PschLib.GoogleSheets
                     continue;
                 }
 
-                var enumName = $"{className}{field.Name}";
+                var enumName = GetLocalEnumName(className, field.Name);
                 var values = new List<string>();
                 var uniqueValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -377,7 +396,9 @@ namespace PschLib.GoogleSheets
         {
             error = null;
 
-            if (!IsValidIdentifier(value))
+            var enumValueName = GetEnumName(value);
+
+            if (!IsValidIdentifier(enumValueName))
             {
                 error = $"Row {rowNumber}, field '{field.Name}': '{value}' is not a valid enum value.";
                 return false;
@@ -385,7 +406,7 @@ namespace PschLib.GoogleSheets
 
             if (uniqueValues.Add(value))
             {
-                values.Add(value);
+                values.Add(enumValueName);
             }
 
             return true;
@@ -409,11 +430,11 @@ namespace PschLib.GoogleSheets
 
                 if (typeInfo.EnumMode == SheetEnumMode.Local)
                 {
-                    enumTypeName = $"{className}{field.Name}";
+                    enumTypeName = GetLocalEnumName(className, field.Name);
                 }
                 else if (typeInfo.EnumMode == SheetEnumMode.Shared)
                 {
-                    enumTypeName = string.IsNullOrWhiteSpace(typeInfo.EnumTypeName) ? field.Name : typeInfo.EnumTypeName;
+                    enumTypeName = GetEnumName(string.IsNullOrWhiteSpace(typeInfo.EnumTypeName) ? field.Name : typeInfo.EnumTypeName);
                 }
                 else if (typeInfo.EnumMode == SheetEnumMode.Existing)
                 {
@@ -486,6 +507,32 @@ namespace PschLib.GoogleSheets
             }
 
             return true;
+        }
+
+        internal static string GetMemberName(string fieldName)
+        {
+            return ChangeFirstCharacterCase(fieldName, false);
+        }
+
+        internal static string GetEnumName(string name)
+        {
+            return ChangeFirstCharacterCase(name, true);
+        }
+
+        internal static string GetLocalEnumName(string className, string fieldName)
+        {
+            return $"{className}{GetEnumName(fieldName)}";
+        }
+
+        private static string ChangeFirstCharacterCase(string name, bool upper)
+        {
+            if (string.IsNullOrEmpty(name))
+            {
+                return name;
+            }
+
+            var first = upper ? char.ToUpperInvariant(name[0]) : char.ToLowerInvariant(name[0]);
+            return first == name[0] ? name : first + name.Substring(1);
         }
 
         private static bool IsValidNamespace(string value)

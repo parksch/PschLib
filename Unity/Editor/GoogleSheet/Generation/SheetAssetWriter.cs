@@ -203,11 +203,12 @@ namespace PschLib.GoogleSheets
 
                 foreach (var pair in sourceRow.Values)
                 {
-                    var field = dataType.GetField(pair.Key.Name, BindingFlags.Instance | BindingFlags.Public);
+                    var memberName = SheetDataCodeGenerator.GetMemberName(pair.Key.Name);
+                    var field = dataType.GetField(memberName, BindingFlags.Instance | BindingFlags.Public);
 
                     if (field == null)
                     {
-                        throw new InvalidOperationException($"Generated field was not found: {dataType.FullName}.{pair.Key.Name}");
+                        throw new InvalidOperationException($"Generated field was not found: {dataType.FullName}.{memberName}");
                     }
 
                     field.SetValue(data, ConvertValue(pair.Value, field.FieldType));

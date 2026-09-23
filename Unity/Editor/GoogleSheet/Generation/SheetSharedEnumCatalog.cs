@@ -19,9 +19,11 @@ namespace PschLib.GoogleSheets
 
             foreach (var field in fields)
             {
-                if (field.Type.EnumMode == SheetEnumMode.Local && Find(updatedDefinitions, $"{currentClassName}{field.Name}") != null)
+                var localEnumName = SheetDataCodeGenerator.GetLocalEnumName(currentClassName, field.Name);
+
+                if (field.Type.EnumMode == SheetEnumMode.Local && Find(updatedDefinitions, localEnumName) != null)
                 {
-                    error = $"Local enum '{currentClassName}{field.Name}' conflicts with an existing shared enum.";
+                    error = $"Local enum '{localEnumName}' conflicts with an existing shared enum.";
                     return false;
                 }
 
@@ -34,9 +36,11 @@ namespace PschLib.GoogleSheets
 
                 foreach (var localField in fields)
                 {
-                    if (localField.Type.EnumMode == SheetEnumMode.Local && $"{currentClassName}{localField.Name}" == enumTypeName)
+                    var otherLocalEnumName = SheetDataCodeGenerator.GetLocalEnumName(currentClassName, localField.Name);
+
+                    if (localField.Type.EnumMode == SheetEnumMode.Local && otherLocalEnumName == enumTypeName)
                     {
-                        error = $"Shared enum '{enumTypeName}' conflicts with local enum '{currentClassName}{localField.Name}'.";
+                        error = $"Shared enum '{enumTypeName}' conflicts with local enum '{otherLocalEnumName}'.";
                         return false;
                     }
                 }
@@ -69,8 +73,16 @@ namespace PschLib.GoogleSheets
                 }
                 else if (definition.Name != enumTypeName)
                 {
-                    error = $"Shared enum casing does not match. Use '{definition.Name}' instead of '{enumTypeName}'.";
-                    return false;
+                    var generatedDefinitionName = SheetDataCodeGenerator.GetEnumName(definition.Name);
+
+                    if (generatedDefinitionName != enumTypeName)
+                    {
+                        error = $"Shared enum casing does not match. Use '{generatedDefinitionName}' instead of '{enumTypeName}'.";
+                        return false;
+                    }
+
+                    definition.Name = enumTypeName;
+                    changed = true;
                 }
 
                 var existingValues = new HashSet<string>(definition.Values, StringComparer.OrdinalIgnoreCase);
@@ -171,7 +183,8 @@ namespace PschLib.GoogleSheets
 
         private static string GetEnumTypeName(SheetField field)
         {
-            return string.IsNullOrWhiteSpace(field.Type.EnumTypeName) ? field.Name : field.Type.EnumTypeName;
+            var name = string.IsNullOrWhiteSpace(field.Type.EnumTypeName) ? field.Name : field.Type.EnumTypeName;
+            return SheetDataCodeGenerator.GetEnumName(name);
         }
 
         private static SheetSharedEnumDefinition Find(List<SheetSharedEnumDefinition> definitions, string name)
@@ -191,7 +204,9 @@ namespace PschLib.GoogleSheets
         {
             error = null;
 
-            if (!SheetDataCodeGenerator.IsValidIdentifier(value))
+            var enumValueName = SheetDataCodeGenerator.GetEnumName(value);
+
+            if (!SheetDataCodeGenerator.IsValidIdentifier(enumValueName))
             {
                 error = $"Row {rowNumber}, field '{fieldName}': '{value}' is not a valid enum value.";
                 return false;
@@ -199,7 +214,7 @@ namespace PschLib.GoogleSheets
 
             if (existingValues.Add(value))
             {
-                definition.Values.Add(value);
+                definition.Values.Add(enumValueName);
                 changed = true;
             }
 
