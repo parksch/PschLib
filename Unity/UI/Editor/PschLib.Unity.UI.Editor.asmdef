@@ -1,0 +1,28 @@
+{
+    "name": "PschLib.Unity.UI.Editor",
+    "rootNamespace": "PschLib.Unity.UI.Editor",
+    "references": [
+        "PschLib.Unity.UI",
+        "UnityEngine.UI",
+        "Unity.TextMeshPro"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "PSCHLIB_UGUI"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.ugui",
+            "expression": "",
+            "define": "PSCHLIB_UGUI"
+        }
+    ],
+    "noEngineReferences": false
+}

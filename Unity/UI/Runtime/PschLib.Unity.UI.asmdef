@@ -1,0 +1,25 @@
+{
+    "name": "PschLib.Unity.UI",
+    "rootNamespace": "PschLib.Unity.UI",
+    "references": [
+        "UnityEngine.UI",
+        "Unity.TextMeshPro"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "PSCHLIB_UGUI"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.ugui",
+            "expression": "",
+            "define": "PSCHLIB_UGUI"
+        }
+    ],
+    "noEngineReferences": false
+}
