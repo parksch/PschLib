@@ -140,7 +140,7 @@ namespace PschLib.AssetLoading.Addressables.Internal
                 return AddressableUnloadResult.NotFound;
             }
 
-            if (entry.ReferenceCount > 0)
+            if (entry.ReferenceCount > 0 || entry.PinCount > 0)
             {
                 handle = default;
                 return AddressableUnloadResult.InUse;
@@ -151,6 +151,18 @@ namespace PschLib.AssetLoading.Addressables.Internal
             return AddressableUnloadResult.Unloaded;
         }
 
+        public IDisposable Pin<TAsset>(string address) where TAsset : Object
+        {
+            if (!entries.TryGetValue(new AddressableAssetKey(address, typeof(TAsset)), out var entry) ||
+                entry.Asset == null || !entry.Handle.IsValid())
+            {
+                throw new InvalidOperationException($"Cannot pin an asset that is not cached: {address} ({typeof(TAsset).Name})");
+            }
+
+            entry.PinCount++;
+            return new CachePin(entry);
+        }
+
         public int ClearUnused()
         {
             var unusedKeys = new List<AddressableAssetKey>();
@@ -158,7 +170,7 @@ namespace PschLib.AssetLoading.Addressables.Internal
 
             foreach (var pair in entries)
             {
-                if (pair.Value.ReferenceCount == 0)
+                if (pair.Value.ReferenceCount == 0 && pair.Value.PinCount == 0)
                 {
                     unusedKeys.Add(pair.Key);
                 }
@@ -275,12 +287,34 @@ namespace PschLib.AssetLoading.Addressables.Internal
             public readonly Object Asset;
             public readonly AsyncOperationHandle Handle;
             public int ReferenceCount;
+            public int PinCount;
 
             public Entry(Object asset, AsyncOperationHandle handle, int referenceCount)
             {
                 Asset = asset;
                 Handle = handle;
                 ReferenceCount = referenceCount;
+            }
+        }
+
+        private sealed class CachePin : IDisposable
+        {
+            private Entry entry;
+
+            public CachePin(Entry entry)
+            {
+                this.entry = entry;
+            }
+
+            public void Dispose()
+            {
+                if (entry == null)
+                {
+                    return;
+                }
+
+                entry.PinCount--;
+                entry = null;
             }
         }
     }

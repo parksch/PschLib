@@ -1,0 +1,4 @@
+# Keep regression tests in the library even when a local exclude hides Tests/.
+!/Tests/
+!/Tests/**
+!/Tests.meta

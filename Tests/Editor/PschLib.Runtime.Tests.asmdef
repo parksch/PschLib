@@ -1,0 +1,8 @@
+{
+    "name": "PschLib.Runtime.Tests",
+    "rootNamespace": "PschLib.Tests",
+    "references": ["PschLib.Runtime"],
+    "includePlatforms": ["Editor"],
+    "optionalUnityReferences": ["TestAssemblies"],
+    "autoReferenced": false
+}

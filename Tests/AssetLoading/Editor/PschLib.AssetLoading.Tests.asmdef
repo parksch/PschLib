@@ -1,0 +1,11 @@
+{
+    "name": "PschLib.AssetLoading.Tests",
+    "references": ["PschLib.AssetLoading"],
+    "includePlatforms": ["Editor"],
+    "optionalUnityReferences": ["TestAssemblies"],
+    "autoReferenced": false,
+    "defineConstraints": ["PSCHLIB_UNITASK"],
+    "versionDefines": [
+        { "name": "com.cysharp.unitask", "expression": "", "define": "PSCHLIB_UNITASK" }
+    ]
+}

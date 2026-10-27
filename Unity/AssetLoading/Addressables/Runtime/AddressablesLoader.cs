@@ -79,7 +79,7 @@ namespace PschLib.AssetLoading.Addressables
 
             if (!pendingLoads.TryGetValue(key, out var pendingLoad))
             {
-                pendingLoad = new PendingLoad();
+                pendingLoad = new PendingLoad(generation);
                 pendingLoads.Add(key, pendingLoad);
                 var loadGeneration = generation;
                 NotifyDebugStateChanged();
@@ -90,7 +90,7 @@ namespace PschLib.AssetLoading.Addressables
                 ? await pendingLoad.Task.AttachExternalCancellation(cancellationToken)
                 : await pendingLoad.Task;
 
-            if (loadedAsset == null)
+            if (loadedAsset == null || pendingLoad.Generation != generation)
             {
                 return null;
             }
@@ -149,8 +149,13 @@ namespace PschLib.AssetLoading.Addressables
                     ReleaseHandle(handle);
                 }
 
-                RemovePending(key, pendingLoad);
-                pendingLoad.TrySetResult(cachedAsset);
+                // Cache ownership must survive the first waiter's Release/ClearUnused
+                // while the remaining completion continuations are still running.
+                using (cache.Pin<TAsset>(address))
+                {
+                    RemovePending(key, pendingLoad);
+                    pendingLoad.TrySetResult(cachedAsset);
+                }
             }
             catch (Exception exception)
             {
@@ -386,6 +391,12 @@ namespace PschLib.AssetLoading.Addressables
                 new UniTaskCompletionSource<Object>();
 
             public UniTask<Object> Task => completionSource.Task;
+            public int Generation { get; }
+
+            public PendingLoad(int generation)
+            {
+                Generation = generation;
+            }
 
             public bool TrySetResult(Object asset)
             {

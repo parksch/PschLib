@@ -1,0 +1,7 @@
+{
+    "name": "PschLib.GoogleSheets.Tests",
+    "references": ["PschLib.Unity.Editor", "PschLib.Unity.Runtime"],
+    "includePlatforms": ["Editor"],
+    "optionalUnityReferences": ["TestAssemblies"],
+    "autoReferenced": false
+}

@@ -117,12 +117,12 @@ namespace PschLib.GoogleSheets
 
             var enumType = FindType(existingEnumName);
 
-            if (enumType == null || !enumType.IsEnum)
+            if (!TryGetExistingEnumTypeName(enumType, out var csharpName, out _))
             {
                 return false;
             }
 
-            typeInfo = new SheetTypeInfo(kind, SheetEnumMode.Existing, existingEnumName, enumType);
+            typeInfo = new SheetTypeInfo(kind, SheetEnumMode.Existing, csharpName, enumType);
             return true;
         }
 
@@ -142,17 +142,76 @@ namespace PschLib.GoogleSheets
 
         private static Type FindType(string fullName)
         {
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            if (fullName.StartsWith("global::", StringComparison.Ordinal))
             {
-                var type = assembly.GetType(fullName, false);
+                fullName = fullName.Substring("global::".Length);
+            }
+            fullName = fullName.Replace("@", string.Empty);
 
-                if (type != null)
+            // Prefer an exact CLR name, then try each namespace/type boundary.
+            // Namespace.Outer.Inner.Kind -> Namespace.Outer+Inner+Kind.
+            var candidate = fullName;
+            while (true)
+            {
+                foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
                 {
-                    return type;
+                    var type = assembly.GetType(candidate, false);
+                    if (type != null)
+                    {
+                        return type;
+                    }
                 }
+
+                var boundary = candidate.LastIndexOf('.');
+                if (boundary < 0)
+                {
+                    return null;
+                }
+                candidate = candidate.Substring(0, boundary) + "+" + candidate.Substring(boundary + 1);
+            }
+        }
+
+        internal static bool TryGetExistingEnumTypeName(Type enumType, out string typeName, out string error)
+        {
+            typeName = null;
+            error = null;
+            if (enumType == null || !enumType.IsEnum)
+            {
+                error = "The referenced type must be an enum.";
+                return false;
             }
 
-            return null;
+            if (!enumType.IsVisible)
+            {
+                error = $"Enum '{enumType.FullName}' and all its containing types must be public.";
+                return false;
+            }
+
+            if (enumType.IsGenericType || enumType.ContainsGenericParameters)
+            {
+                error = $"Enum '{enumType.FullName}' inside a generic type is not supported.";
+                return false;
+            }
+
+            var sections = enumType.FullName.Replace('+', '.').Split('.');
+            for (var i = 0; i < sections.Length; i++)
+            {
+                if (SheetDataCodeGenerator.IsValidIdentifier(sections[i]))
+                {
+                    continue;
+                }
+
+                // Reflection omits the @ escape used for C# keyword identifiers.
+                if (string.IsNullOrEmpty(sections[i]) || !SheetDataCodeGenerator.IsValidIdentifier(sections[i] + "Value"))
+                {
+                    error = $"Enum '{enumType.FullName}' cannot be represented as a C# type name.";
+                    return false;
+                }
+                sections[i] = "@" + sections[i];
+            }
+
+            typeName = string.Join(".", sections);
+            return true;
         }
 
         private static Dictionary<string, SheetScalarTypeDefinition> CreateSheetNameMap()

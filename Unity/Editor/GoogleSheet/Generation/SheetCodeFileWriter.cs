@@ -19,10 +19,22 @@ namespace PschLib.GoogleSheets
             ValidateWrite(project, result);
             ValidateSharedEnums(project);
             ValidateGeneratedTypeNames(project, new[] { result });
-            return WriteCore(project, result, out changed);
+            var transaction = new GeneratedFileTransaction();
+            changed = false;
+            try
+            {
+                return WriteCore(project, result, transaction, out changed);
+            }
+            catch (Exception exception)
+            {
+                changed = false;
+                transaction.Rollback(exception);
+                throw;
+            }
         }
 
-        private static string WriteCore(GoogleSheetProject project, GoogleSheetImportResult result, out bool changed)
+        private static string WriteCore(GoogleSheetProject project, GoogleSheetImportResult result,
+            GeneratedFileTransaction transaction, out bool changed)
         {
             SheetDataCodeGenerator.TryCreateClassName(result.Document.Name, out var className, out _);
 
@@ -30,26 +42,26 @@ namespace PschLib.GoogleSheets
             var rootAssetPath = GoogleSheetPathUtility.GetScriptOutputPath(project);
             var sheetAssetPath = $"{rootAssetPath}/{className}";
             var sheetDirectory = GoogleSheetPathUtility.GetAbsolutePath(sheetAssetPath);
-            Directory.CreateDirectory(sheetDirectory);
-            changed = WriteSharedEnums(project, targetNamespace, rootAssetPath);
+            transaction.CreateDirectory(sheetDirectory);
+            changed = WriteSharedEnums(project, targetNamespace, rootAssetPath, transaction);
 
             var dataFileName = $"{className}.Data.g.cs";
             var functionsFileName = $"{className}.Functions.cs";
             var tableFileName = $"{className}Table.g.cs";
             var keyField = result.Fields.Find(field => field.IsKey);
 
-            changed |= WriteIfChanged(Path.Combine(sheetDirectory, dataFileName), result.GeneratedCode);
+            changed |= transaction.WriteIfChanged(Path.Combine(sheetDirectory, dataFileName), result.GeneratedCode, utf8WithoutBom);
 
             if (project.GenerateScriptableObject)
             {
-                changed |= WriteIfChanged(Path.Combine(sheetDirectory, tableFileName), CreateTableCode(targetNamespace, className, SheetDataCodeGenerator.GetMemberName(keyField.Name)));
+                changed |= transaction.WriteIfChanged(Path.Combine(sheetDirectory, tableFileName), CreateTableCode(targetNamespace, className, SheetDataCodeGenerator.GetMemberName(keyField.Name)), utf8WithoutBom);
             }
 
             var functionsPath = Path.Combine(sheetDirectory, functionsFileName);
 
             if (!File.Exists(functionsPath))
             {
-                File.WriteAllText(functionsPath, CreateFunctionsCode(targetNamespace, className), utf8WithoutBom);
+                transaction.WriteIfChanged(functionsPath, CreateFunctionsCode(targetNamespace, className), utf8WithoutBom);
                 changed = true;
             }
 
@@ -82,12 +94,21 @@ namespace PschLib.GoogleSheets
             ValidateGeneratedTypeNames(project, results);
 
             changed = false;
-
-            for (var index = 0; index < results.Count; index++)
+            var transaction = new GeneratedFileTransaction();
+            try
             {
-                WriteCore(project, results[index], out var sheetChanged);
-                changed |= sheetChanged;
-                reportProgress?.Invoke(index + 1, results.Count);
+                for (var index = 0; index < results.Count; index++)
+                {
+                    WriteCore(project, results[index], transaction, out var sheetChanged);
+                    changed |= sheetChanged;
+                    reportProgress?.Invoke(index + 1, results.Count);
+                }
+            }
+            catch (Exception exception)
+            {
+                changed = false;
+                transaction.Rollback(exception);
+                throw;
             }
         }
 
@@ -281,7 +302,8 @@ namespace PschLib.GoogleSheets
             return existingTypes;
         }
 
-        private static bool WriteSharedEnums(GoogleSheetProject project, string targetNamespace, string rootAssetPath)
+        private static bool WriteSharedEnums(GoogleSheetProject project, string targetNamespace, string rootAssetPath,
+            GeneratedFileTransaction transaction)
         {
             if (project.SharedEnums.Count == 0)
             {
@@ -312,40 +334,9 @@ namespace PschLib.GoogleSheets
             }
 
             builder.AppendLine("}");
-            var changed = DeleteLegacyGeneratedFile(legacyFilePath);
-            return WriteIfChanged(filePath, builder.ToString()) || changed;
-        }
-
-        private static bool DeleteLegacyGeneratedFile(string filePath)
-        {
-            var deleted = false;
-
-            if (File.Exists(filePath))
-            {
-                File.Delete(filePath);
-                deleted = true;
-            }
-
-            var metaPath = $"{filePath}.meta";
-
-            if (File.Exists(metaPath))
-            {
-                File.Delete(metaPath);
-                deleted = true;
-            }
-
-            return deleted;
-        }
-
-        private static bool WriteIfChanged(string filePath, string contents)
-        {
-            if (File.Exists(filePath) && string.Equals(File.ReadAllText(filePath), contents, StringComparison.Ordinal))
-            {
-                return false;
-            }
-
-            File.WriteAllText(filePath, contents, utf8WithoutBom);
-            return true;
+            var changed = transaction.Delete(legacyFilePath);
+            changed |= transaction.Delete($"{legacyFilePath}.meta");
+            return transaction.WriteIfChanged(filePath, builder.ToString(), utf8WithoutBom) || changed;
         }
 
         private static string CreateFunctionsCode(string targetNamespace, string className)
@@ -360,7 +351,7 @@ namespace PschLib.GoogleSheets
             return builder.ToString();
         }
 
-        private static string CreateTableCode(string targetNamespace, string className, string keyFieldName)
+        internal static string CreateTableCode(string targetNamespace, string className, string keyFieldName)
         {
             var builder = new StringBuilder();
             builder.AppendLine("using System;");
@@ -369,13 +360,13 @@ namespace PschLib.GoogleSheets
             builder.AppendLine();
             builder.AppendLine($"namespace {targetNamespace}");
             builder.AppendLine("{");
-            builder.AppendLine($"    public sealed partial class {className}Table : PschLib.GoogleSheets.SheetTableBase, ISerializationCallbackReceiver");
+            builder.AppendLine($"    public sealed partial class {className}Table : global::PschLib.GoogleSheets.SheetTableBase, global::UnityEngine.ISerializationCallbackReceiver");
             builder.AppendLine("    {");
-            builder.AppendLine($"        [SerializeField] private List<{className}> rows = new List<{className}>();");
-            builder.AppendLine($"        [NonSerialized] private Dictionary<string, {className}> byId;");
+            builder.AppendLine($"        [global::UnityEngine.SerializeField] private global::System.Collections.Generic.List<{className}> rows = new global::System.Collections.Generic.List<{className}>();");
+            builder.AppendLine($"        [global::System.NonSerialized] private global::System.Collections.Generic.Dictionary<string, {className}> byId;");
             builder.AppendLine();
-            builder.AppendLine($"        public IReadOnlyList<{className}> Rows => rows;");
-            builder.AppendLine($"        public IReadOnlyDictionary<string, {className}> ById");
+            builder.AppendLine($"        public global::System.Collections.Generic.IReadOnlyList<{className}> Rows => rows;");
+            builder.AppendLine($"        public global::System.Collections.Generic.IReadOnlyDictionary<string, {className}> ById");
             builder.AppendLine("        {");
             builder.AppendLine("            get");
             builder.AppendLine("            {");
@@ -403,7 +394,7 @@ namespace PschLib.GoogleSheets
             builder.AppendLine("                return value;");
             builder.AppendLine("            }");
             builder.AppendLine();
-            builder.AppendLine($"            throw new KeyNotFoundException($\"{className} ID '{{id}}' was not found.\");");
+            builder.AppendLine($"            throw new global::System.Collections.Generic.KeyNotFoundException($\"{className} ID '{{id}}' was not found.\");");
             builder.AppendLine("        }");
             builder.AppendLine();
             builder.AppendLine("        private void EnsureLookup()");
@@ -413,7 +404,7 @@ namespace PschLib.GoogleSheets
             builder.AppendLine("                return;");
             builder.AppendLine("            }");
             builder.AppendLine();
-            builder.AppendLine($"            byId = new Dictionary<string, {className}>(rows.Count, StringComparer.OrdinalIgnoreCase);");
+            builder.AppendLine($"            byId = new global::System.Collections.Generic.Dictionary<string, {className}>(rows.Count, global::System.StringComparer.OrdinalIgnoreCase);");
             builder.AppendLine();
             builder.AppendLine("            foreach (var row in rows)");
             builder.AppendLine("            {");
@@ -426,11 +417,11 @@ namespace PschLib.GoogleSheets
             builder.AppendLine("            }");
             builder.AppendLine("        }");
             builder.AppendLine();
-            builder.AppendLine("        void ISerializationCallbackReceiver.OnBeforeSerialize()");
+            builder.AppendLine("        void global::UnityEngine.ISerializationCallbackReceiver.OnBeforeSerialize()");
             builder.AppendLine("        {");
             builder.AppendLine("        }");
             builder.AppendLine();
-            builder.AppendLine("        void ISerializationCallbackReceiver.OnAfterDeserialize()");
+            builder.AppendLine("        void global::UnityEngine.ISerializationCallbackReceiver.OnAfterDeserialize()");
             builder.AppendLine("        {");
             builder.AppendLine("            byId = null;");
             builder.AppendLine("        }");

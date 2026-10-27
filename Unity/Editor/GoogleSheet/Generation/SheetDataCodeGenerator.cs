@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace PschLib.GoogleSheets
 {
@@ -18,6 +20,13 @@ namespace PschLib.GoogleSheets
         };
 
         public static bool TryGenerate(string sheetName, IReadOnlyList<SheetField> fields, IReadOnlyList<SheetDataRow> rows, string targetNamespace, out string code, out string error)
+        {
+            return TryGenerate(sheetName, fields, rows, targetNamespace, null, out code, out error);
+        }
+
+        // Pass the previous generated file when regenerating serialized enum types.
+        public static bool TryGenerate(string sheetName, IReadOnlyList<SheetField> fields, IReadOnlyList<SheetDataRow> rows,
+            string targetNamespace, string previousGeneratedCode, out string code, out string error)
         {
             code = null;
             error = null;
@@ -84,19 +93,24 @@ namespace PschLib.GoogleSheets
 
             foreach (var pair in enumValues)
             {
+                if (!TryPreserveEnumValues(pair.Key, pair.Value, previousGeneratedCode, out var stableValues, out error))
+                {
+                    return false;
+                }
+
                 builder.AppendLine($"    public enum {pair.Key}");
                 builder.AppendLine("    {");
 
-                for (var index = 0; index < pair.Value.Count; index++)
+                foreach (var value in stableValues)
                 {
-                    builder.AppendLine($"        {pair.Value[index]} = {index},");
+                    builder.AppendLine($"        {value.Key} = {value.Value.ToString(CultureInfo.InvariantCulture)},");
                 }
 
                 builder.AppendLine("    }");
                 builder.AppendLine();
             }
 
-            builder.AppendLine("    [Serializable]");
+            builder.AppendLine("    [global::System.Serializable]");
             builder.AppendLine($"    public partial class {className} // Generated data. Do not edit.");
             builder.AppendLine("    {");
 
@@ -114,6 +128,76 @@ namespace PschLib.GoogleSheets
             builder.AppendLine("    }");
             builder.AppendLine("}");
             code = builder.ToString();
+            return true;
+        }
+
+        private static bool TryPreserveEnumValues(string enumName, List<string> currentValues, string previousCode,
+            out List<KeyValuePair<string, int>> values, out string error)
+        {
+            values = new List<KeyValuePair<string, int>>();
+            error = null;
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var numbers = new HashSet<int>();
+            long nextValue = 0;
+
+            if (!string.IsNullOrWhiteSpace(previousCode))
+            {
+                var pattern = @"\bpublic\s+enum\s+" + Regex.Escape(enumName) + @"\s*\{([^}]*)\}";
+                var matches = Regex.Matches(previousCode, pattern);
+                if (matches.Count == 0 && Regex.IsMatch(previousCode, @"\bpublic\s+enum\s+" + Regex.Escape(enumName) + @"\b"))
+                {
+                    error = $"Cannot preserve enum '{enumName}'. Its previous generated declaration is not supported.";
+                    return false;
+                }
+
+                if (matches.Count > 1)
+                {
+                    error = $"Previous generated code contains duplicate enum '{enumName}'.";
+                    return false;
+                }
+
+                if (matches.Count == 1)
+                {
+                    foreach (var member in matches[0].Groups[1].Value.Split(','))
+                    {
+                        if (string.IsNullOrWhiteSpace(member))
+                        {
+                            continue;
+                        }
+
+                        var parts = member.Split('=');
+                        var name = parts[0].Trim();
+                        if (parts.Length != 2 || !IsValidIdentifier(name) ||
+                            !int.TryParse(parts[1].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var number) ||
+                            number < 0 || !names.Add(name) || !numbers.Add(number))
+                        {
+                            error = $"Cannot preserve enum '{enumName}'. Its previous generated members must have unique names and non-negative integer values.";
+                            return false;
+                        }
+
+                        // Keep removed members too: serialized values must never be reused.
+                        values.Add(new KeyValuePair<string, int>(name, number));
+                        nextValue = Math.Max(nextValue, (long)number + 1);
+                    }
+                }
+            }
+
+            foreach (var name in currentValues)
+            {
+                if (!names.Add(name))
+                {
+                    continue;
+                }
+
+                if (nextValue > int.MaxValue)
+                {
+                    error = $"Enum '{enumName}' has no remaining integer values.";
+                    return false;
+                }
+
+                values.Add(new KeyValuePair<string, int>(name, (int)nextValue++));
+            }
+
             return true;
         }
 
@@ -346,15 +430,9 @@ namespace PschLib.GoogleSheets
 
                 var enumType = field.Type.EnumRuntimeType;
 
-                if (enumType == null || !enumType.IsEnum)
+                if (!SheetTypeCatalog.TryGetExistingEnumTypeName(enumType, out _, out error))
                 {
-                    error = $"Field '{field.Name}' does not reference a valid enum type.";
-                    return false;
-                }
-
-                if (!enumType.IsPublic && !enumType.IsNestedPublic)
-                {
-                    error = $"Enum '{field.Type.EnumTypeName}' must be public.";
+                    error = $"Field '{field.Name}': {error}";
                     return false;
                 }
 
@@ -438,7 +516,11 @@ namespace PschLib.GoogleSheets
                 }
                 else if (typeInfo.EnumMode == SheetEnumMode.Existing)
                 {
-                    enumTypeName = $"global::{typeInfo.EnumTypeName}";
+                    if (!SheetTypeCatalog.TryGetExistingEnumTypeName(typeInfo.EnumRuntimeType, out var existingName, out error))
+                    {
+                        return false;
+                    }
+                    enumTypeName = $"global::{existingName}";
                 }
                 else
                 {
@@ -446,7 +528,7 @@ namespace PschLib.GoogleSheets
                     return false;
                 }
 
-                typeName = typeInfo.Kind == SheetTypeKind.EnumList ? $"List<{enumTypeName}>" : enumTypeName;
+                typeName = typeInfo.Kind == SheetTypeKind.EnumList ? $"global::System.Collections.Generic.List<{enumTypeName}>" : enumTypeName;
                 return true;
             }
 
@@ -456,7 +538,7 @@ namespace PschLib.GoogleSheets
                 return false;
             }
 
-            typeName = typeInfo.Kind == SheetTypeKind.List ? $"List<{typeInfo.ElementType.CSharpName}>" : typeInfo.ElementType.CSharpName;
+            typeName = typeInfo.Kind == SheetTypeKind.List ? $"global::System.Collections.Generic.List<{typeInfo.ElementType.CSharpName}>" : typeInfo.ElementType.CSharpName;
             return true;
         }
 

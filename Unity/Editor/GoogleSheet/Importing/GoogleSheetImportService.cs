@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading.Tasks;
 
 namespace PschLib.GoogleSheets
@@ -55,8 +56,16 @@ namespace PschLib.GoogleSheets
             }
 
             var targetNamespace = GoogleSheetPathUtility.GetTargetNamespace(project);
+            if (!SheetDataCodeGenerator.TryCreateClassName(document.Name, out var className, out var nameError))
+            {
+                throw new InvalidOperationException(nameError);
+            }
 
-            if (!SheetDataCodeGenerator.TryGenerate(document.Name, fields, rows, targetNamespace, out var generatedCode, out var generationError))
+            var dataPath = GoogleSheetPathUtility.GetAbsolutePath(
+                $"{GoogleSheetPathUtility.GetScriptOutputPath(project)}/{className}/{className}.Data.g.cs");
+            var previousCode = File.Exists(dataPath) ? File.ReadAllText(dataPath) : null;
+
+            if (!SheetDataCodeGenerator.TryGenerate(document.Name, fields, rows, targetNamespace, previousCode, out var generatedCode, out var generationError))
             {
                 throw new InvalidOperationException(generationError);
             }

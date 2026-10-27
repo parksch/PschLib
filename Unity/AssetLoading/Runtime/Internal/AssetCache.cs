@@ -130,7 +130,7 @@ namespace PschLib.AssetLoading.Internal
             return AssetReleaseResult.Unused;
         }
 
-        public AssetUnloadResult Unload<TAsset>(string address, out Object asset) where TAsset : Object
+        public AssetUnloadResult Unload<TAsset>(string address, out Object asset, Func<AssetKey, bool> canUnload = null) where TAsset : Object
         {
             var key = new AssetKey(address, typeof(TAsset));
 
@@ -140,15 +140,58 @@ namespace PschLib.AssetLoading.Internal
                 return AssetUnloadResult.NotFound;
             }
 
-            if (entry.ReferenceCount > 0)
+            // Different paths or requested types can resolve to the same Unity asset.
+            if (!CanUnloadAsset(entry.Asset, canUnload))
             {
                 asset = null;
                 return AssetUnloadResult.InUse;
             }
 
-            entries.Remove(key);
             asset = entry.Asset;
+            RemoveAssetEntries(asset);
             return AssetUnloadResult.Unloaded;
+        }
+
+        public IDisposable Pin<TAsset>(string address) where TAsset : Object
+        {
+            if (!entries.TryGetValue(new AssetKey(address, typeof(TAsset)), out var entry) || entry.Asset == null)
+            {
+                throw new InvalidOperationException($"Cannot pin an asset that is not cached: {address} ({typeof(TAsset).Name})");
+            }
+
+            entry.PinCount++;
+            return new CachePin(entry);
+        }
+
+        private bool CanUnloadAsset(Object asset, Func<AssetKey, bool> canUnload)
+        {
+            foreach (var pair in entries)
+            {
+                if (pair.Value.Asset == asset &&
+                    (pair.Value.ReferenceCount > 0 || pair.Value.PinCount > 0 || (canUnload != null && !canUnload(pair.Key))))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private void RemoveAssetEntries(Object asset)
+        {
+            var keys = new List<AssetKey>();
+            foreach (var pair in entries)
+            {
+                if (pair.Value.Asset == asset)
+                {
+                    keys.Add(pair.Key);
+                }
+            }
+
+            foreach (var key in keys)
+            {
+                entries.Remove(key);
+            }
         }
 
         public int ClearUnused(Func<AssetKey, bool> canUnload, Action<Object> unload)
@@ -163,32 +206,43 @@ namespace PschLib.AssetLoading.Internal
                 throw new ArgumentNullException(nameof(unload));
             }
 
-            var unusedKeys = new List<AssetKey>();
-            var unusedAssets = new List<Object>();
+            var unusedAssets = new HashSet<Object>();
+            var retainedAssets = new HashSet<Object>();
 
             foreach (var pair in entries)
             {
-                if (pair.Value.ReferenceCount == 0 && canUnload(pair.Key))
+                if (pair.Value.ReferenceCount > 0 || pair.Value.PinCount > 0 || !canUnload(pair.Key))
+                {
+                    retainedAssets.Add(pair.Value.Asset);
+                }
+                else
+                {
+                    unusedAssets.Add(pair.Value.Asset);
+                }
+            }
+
+            unusedAssets.ExceptWith(retainedAssets);
+            var unusedKeys = new List<AssetKey>();
+            foreach (var pair in entries)
+            {
+                if (unusedAssets.Contains(pair.Value.Asset))
                 {
                     unusedKeys.Add(pair.Key);
                 }
             }
 
-            for (var i = 0; i < unusedKeys.Count; i++)
+            foreach (var key in unusedKeys)
             {
-                var key = unusedKeys[i];
-                var asset = entries[key].Asset;
                 entries.Remove(key);
-                unusedAssets.Add(asset);
             }
 
             List<Exception> exceptions = null;
 
-            for (var i = 0; i < unusedAssets.Count; i++)
+            foreach (var asset in unusedAssets)
             {
                 try
                 {
-                    unload(unusedAssets[i]);
+                    unload(asset);
                 }
                 catch (Exception exception)
                 {
@@ -217,7 +271,7 @@ namespace PschLib.AssetLoading.Internal
                 return;
             }
 
-            var assets = new List<Object>(entries.Count);
+            var assets = new HashSet<Object>();
 
             foreach (var entry in entries.Values)
             {
@@ -228,11 +282,11 @@ namespace PschLib.AssetLoading.Internal
 
             List<Exception> exceptions = null;
 
-            for (var i = 0; i < assets.Count; i++)
+            foreach (var asset in assets)
             {
                 try
                 {
-                    unload(assets[i]);
+                    unload(asset);
                 }
                 catch (Exception exception)
                 {
@@ -283,11 +337,33 @@ namespace PschLib.AssetLoading.Internal
         {
             public readonly Object Asset;
             public int ReferenceCount;
+            public int PinCount;
 
             public AssetCacheEntry(Object asset, int referenceCount)
             {
                 Asset = asset;
                 ReferenceCount = referenceCount;
+            }
+        }
+
+        private sealed class CachePin : IDisposable
+        {
+            private AssetCacheEntry entry;
+
+            public CachePin(AssetCacheEntry entry)
+            {
+                this.entry = entry;
+            }
+
+            public void Dispose()
+            {
+                if (entry == null)
+                {
+                    return;
+                }
+
+                entry.PinCount--;
+                entry = null;
             }
         }
     }

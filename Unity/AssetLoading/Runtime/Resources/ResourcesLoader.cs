@@ -99,7 +99,7 @@ namespace PschLib.AssetLoading.Resources
 
             if (!pendingLoads.TryGetValue(key, out var pendingLoad))
             {
-                pendingLoad = new PendingLoad();
+                pendingLoad = new PendingLoad(generation);
                 pendingLoads.Add(key, pendingLoad);
                 var loadGeneration = generation;
                 NotifyDebugStateChanged();
@@ -110,7 +110,7 @@ namespace PschLib.AssetLoading.Resources
                 ? await pendingLoad.Task.AttachExternalCancellation(cancellationToken)
                 : await pendingLoad.Task;
 
-            if (loadedAsset == null)
+            if (loadedAsset == null || pendingLoad.Generation != generation)
             {
                 return null;
             }
@@ -156,15 +156,13 @@ namespace PschLib.AssetLoading.Resources
             ValidateMainThread();
             ValidatePath(path);
 
-            var key = new AssetKey(path, typeof(TAsset));
-
-            if (pendingLoads.ContainsKey(key))
+            if (IsLoading(path))
             {
                 Debug.LogWarning($"Resource asset unload was ignored because it is still loading: {path} ({typeof(TAsset).Name})");
                 return;
             }
 
-            var result = cache.Unload<TAsset>(path, out var asset);
+            var result = cache.Unload<TAsset>(path, out var asset, key => !IsLoading(key.Address));
 
             switch (result)
             {
@@ -188,7 +186,7 @@ namespace PschLib.AssetLoading.Resources
             ValidateMainThread();
             try
             {
-                cache.ClearUnused(key => !pendingLoads.ContainsKey(key), UnloadAsset);
+                cache.ClearUnused(key => !IsLoading(key.Address), UnloadAsset);
             }
             finally
             {
@@ -256,8 +254,13 @@ namespace PschLib.AssetLoading.Resources
                     cachedAsset = asset;
                 }
 
-                RemovePending(key, pendingLoad);
-                pendingLoad.TrySetResult(cachedAsset);
+                // Completion invokes waiters inline. Keep the asset alive until all
+                // waiters have had a chance to acquire their own reference.
+                using (cache.Pin<TAsset>(path))
+                {
+                    RemovePending(key, pendingLoad);
+                    pendingLoad.TrySetResult(cachedAsset);
+                }
             }
             catch (Exception exception)
             {
@@ -291,6 +294,19 @@ namespace PschLib.AssetLoading.Resources
             var detachedLoads = new List<PendingLoad>(pendingLoads.Values);
             pendingLoads.Clear();
             return detachedLoads;
+        }
+
+        private bool IsLoading(string path)
+        {
+            foreach (var key in pendingLoads.Keys)
+            {
+                if (string.Equals(key.Address, path, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static void UnloadAsset(Object asset)
@@ -357,6 +373,12 @@ namespace PschLib.AssetLoading.Resources
             private readonly UniTaskCompletionSource<Object> completionSource = new UniTaskCompletionSource<Object>();
 
             public UniTask<Object> Task => completionSource.Task;
+            public int Generation { get; }
+
+            public PendingLoad(int generation)
+            {
+                Generation = generation;
+            }
 
             public bool TrySetResult(Object asset)
             {

@@ -1,0 +1,9 @@
+{
+    "name": "PschLib.Unity.Runtime.PlayMode.Tests",
+    "rootNamespace": "PschLib.Tests.UnityRuntime",
+    "references": ["PschLib.Runtime", "PschLib.Unity.Runtime"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "optionalUnityReferences": ["TestAssemblies"],
+    "autoReferenced": false
+}

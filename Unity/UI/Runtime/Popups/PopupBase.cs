@@ -13,11 +13,11 @@ namespace PschLib.Unity.UI
 
         public bool IsOpen { get; private set; }
 
-        public bool IsVisible => gameObject.activeSelf;
+        public bool IsVisible => this != null && gameObject.activeSelf;
 
         internal void SetVisibleInternal(bool visible)
         {
-            if (gameObject.activeSelf == visible)
+            if (this == null || gameObject.activeSelf == visible)
             {
                 return;
             }
@@ -41,7 +41,7 @@ namespace PschLib.Unity.UI
             catch
             {
                 IsInitialized = false;
-                gameObject.SetActive(false);
+                SetVisibleInternal(false);
                 throw;
             }
         }
@@ -54,6 +54,10 @@ namespace PschLib.Unity.UI
             }
 
             InitializeInternal();
+            if (this == null)
+            {
+                return;
+            }
 
             IsOpen = true;
 
@@ -64,7 +68,7 @@ namespace PschLib.Unity.UI
             catch
             {
                 IsOpen = false;
-                gameObject.SetActive(false);
+                SetVisibleInternal(false);
                 throw;
             }
         }

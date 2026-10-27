@@ -582,6 +582,11 @@ Common
 Rare
 Epic</pre>
             <p><code>Item</code> 시트의 <code>rank</code> 열이라면 <code>ItemRank</code>가 생성됩니다.</p>
+            <p>다시 가져올 때 기존 <code>.Data.g.cs</code>의 enum 숫자를 유지합니다. 행을 정렬해도
+                기존 값은 바뀌지 않으며, 새 멤버는 마지막 숫자 다음에 추가됩니다. 시트에서 사라진 멤버도
+                저장된 값의 의미가 바뀌지 않도록 유지합니다.</p>
+            <p>생성 파일을 버전 관리에 포함하세요. 파일 삭제, 출력 경로·타입 이름 변경, enum 열 삭제 후
+                재생성 시에는 기존 저장 데이터의 enum 값을 별도로 이전해야 합니다.</p>
 
             <h3>프로젝트 공유 enum</h3>
             <pre>rank
@@ -600,6 +605,8 @@ Ice,Magic</pre>
             <div class="note success">
                 공유 enum에 새로운 값이 추가되면 기존 숫자는 유지되고 새 값은 마지막에 추가됩니다.
             </div>
+            <p>기존 중첩 enum은 <code>enum&lt;Namespace.Outer.Kind&gt;</code>처럼 지정할 수 있습니다.
+                enum과 바깥 타입은 모두 public이어야 합니다. 제네릭 타입 내부 enum은 지원하지 않습니다.</p>
             <p>생성되는 enum 이름과 값은 첫 글자를 대문자로 바꿉니다. 예를 들어 <code>rank</code>는 <code>Rank</code>, <code>common</code>은 <code>Common</code>이 됩니다. 시트의 원본 값은 바꿀 필요가 없습니다.</p>
         </section>
 
@@ -614,6 +621,9 @@ Ice,Magic</pre>
 
             <p><strong>Code Only</strong>는 C#만 생성합니다. C# 컴파일 오류로 SO 생성이 멈추면 오류를 수정한 뒤 <strong>Continue SO Generation</strong>을 누릅니다.</p>
             <p>기존 시트를 다시 생성할 때는 폴더를 지우지 않고 같은 경로에 생성합니다. 자동 생성 파일은 갱신되지만 사용자 함수가 들어 있는 <code>*.Functions.cs</code> partial 파일은 유지됩니다. SO도 다시 생성해 변경된 필드에 데이터를 채웁니다.</p>
+            <p>C# 파일 저장 중 예외가 발생하면 해당 작업에서 변경하거나 삭제한 파일과 기존 GUID를 복원합니다.
+                파일 잠금 등으로 복원까지 실패하면 복원하지 못한 경로를 오류에 함께 표시합니다.
+                이 복원은 실행 중 발생한 예외를 대상으로 하며 에디터 강제 종료나 전원 장애는 포함하지 않습니다.</p>
         </section>
 
         <section id="runtime">

@@ -1,0 +1,11 @@
+{
+    "name": "PschLib.Unity.UI.Tests",
+    "references": ["PschLib.Unity.UI"],
+    "includePlatforms": ["Editor"],
+    "optionalUnityReferences": ["TestAssemblies"],
+    "autoReferenced": false,
+    "defineConstraints": ["PSCHLIB_UGUI"],
+    "versionDefines": [
+        { "name": "com.unity.ugui", "expression": "", "define": "PSCHLIB_UGUI" }
+    ]
+}
